@@ -321,8 +321,24 @@ player_impact <- data.frame(
 
 player_impact
 
+# Adding Player names to impact
 
+library(stringr)
 
+player_names <- play_by_play_data_small %>%
+  select(athlete_id_1, text) %>%
+  filter(!is.na(athlete_id_1), !is.na(text)) %>%
+  mutate(
+    player_name = word(text, 1, 2)  # first two words
+  ) %>%
+  distinct(athlete_id_1, .keep_all = TRUE) %>%
+  select(athlete_id_1, player_name)
+
+player_impact <- player_impact %>%
+  left_join(player_names %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+            by = c("player_id" = "athlete_id_1"))
+
+player_impact
 
 
 
