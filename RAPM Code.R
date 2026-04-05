@@ -212,8 +212,10 @@ play_by_play_data_small <- play_by_play_data_small %>%
 ### Filtering for players with p possessions ###
 ################################################
 
+# Literature has had filter at ~200 minutes played
+
 # ~200 possessions in a game
-p <- 1000
+p <- 2000
 
 qualified_players <- play_by_play_data_small %>%
   group_by(game_id, possession_id) %>%
