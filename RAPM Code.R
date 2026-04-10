@@ -13,7 +13,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2024, 2025)
+seasons <- c(2023, 2024, 2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -330,8 +330,10 @@ colnames(X_no_dummy) <- all_players_no_dummy
 ################################
 
 n_possessions <- nrow(possession_lineups)
-train_idx <- sample(seq_len(n_possessions), size = floor(0.8 * n_possessions))
-test_idx  <- setdiff(seq_len(n_possessions), train_idx)
+train_size    <- floor(0.8 * n_possessions)
+
+train_idx <- seq_len(train_size)
+test_idx  <- seq(train_size + 1, n_possessions)
 
 ###################
 ### Dummy Split ###
