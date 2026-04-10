@@ -335,6 +335,16 @@ train_size    <- floor(0.8 * n_possessions)
 train_idx <- seq_len(train_size)
 test_idx  <- seq(train_size + 1, n_possessions)
 
+############################
+### Making Sparse Matrix ###
+############################
+
+library(Matrix)
+
+# Convert to sparse BEFORE splitting (much more memory efficient)
+X_sparse          <- Matrix(X, sparse = TRUE)
+X_no_dummy_sparse <- Matrix(X_no_dummy, sparse = TRUE)
+
 ###################
 ### Dummy Split ###
 ###################
