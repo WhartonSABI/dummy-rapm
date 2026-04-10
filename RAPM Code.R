@@ -348,17 +348,16 @@ X_no_dummy_sparse <- Matrix(X_no_dummy, sparse = TRUE)
 ###################
 ### Dummy Split ###
 ###################
-X_train       <- X[train_idx, ]
-X_test        <- X[test_idx, ]
-y_train       <- y[train_idx]
-y_test        <- y[test_idx]
+X_train <- X_sparse[train_idx, ]
+X_test  <- X_sparse[test_idx, ]
+y_train <- y[train_idx]
+y_test  <- y[test_idx]
 
 ######################
 ### No Dummy Split ###
 ######################
-X_no_dummy_train <- X_no_dummy[train_idx, ]
-X_no_dummy_test  <- X_no_dummy[test_idx, ]
-# y is shared - same possessions, same net points
+X_no_dummy_train <- X_no_dummy_sparse[train_idx, ]
+X_no_dummy_test  <- X_no_dummy_sparse[test_idx, ]
 y_no_dummy_train <- y[train_idx]
 y_no_dummy_test  <- y[test_idx]
 
