@@ -425,23 +425,56 @@ player_impact_no_dummy
 ### Test Performance ###
 ########################
 
-# Dummy model predictions on test set
-dummy_preds_test <- predict(dummy_ridge_model, newx = X_test, s = "lambda.min")
-dummy_rmse_test  <- sqrt(mean((y_test - dummy_preds_test)^2))
-dummy_mae_test   <- mean(abs(y_test - dummy_preds_test))
+# Individual Play Level Performance
 
-# No dummy model predictions on test set
-no_dummy_preds_test <- predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")
-no_dummy_rmse_test  <- sqrt(mean((y_no_dummy_test - no_dummy_preds_test)^2))
-no_dummy_mae_test   <- mean(abs(y_no_dummy_test - no_dummy_preds_test))
+# R-squared
+r_squared <- function(actual, predicted) {
+  ss_res <- sum((actual - predicted)^2)
+  ss_tot <- sum((actual - mean(actual))^2)
+  1 - (ss_res / ss_tot)
+}
 
-# Comparison table
+dummy_r2    <- r_squared(y_test, dummy_preds_test)
+no_dummy_r2 <- r_squared(y_no_dummy_test, no_dummy_preds_test)
+
 data.frame(
-  model    = c("Dummy", "No Dummy"),
-  RMSE     = c(dummy_rmse_test, no_dummy_rmse_test),
-  MAE      = c(dummy_mae_test, no_dummy_mae_test)
+  model  = c("Dummy", "No Dummy"),
+  RMSE   = c(dummy_rmse_test, no_dummy_rmse_test),
+  R2     = c(dummy_r2, no_dummy_r2)
 )
 
+# Grouping into chunks of 100 possessions and aggregate
 
+test_results_dummy <- data.frame(
+  possession  = test_idx,
+  actual_y    = y_test,
+  predicted_y = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min"))
+)
 
+test_results_no_dummy <- data.frame(
+  possession  = test_idx,
+  actual_y    = y_no_dummy_test,
+  predicted_y = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min"))
+)
 
+aggregate_100 <- function(df) {
+  df %>%
+    mutate(chunk = ceiling(seq_len(n()) / 100)) %>%
+    group_by(chunk) %>%
+    summarise(
+      actual_per_100    = sum(actual_y) / n() * 100,
+      predicted_per_100 = sum(predicted_y) / n() * 100,
+      .groups = "drop"
+    )
+}
+
+dummy_100    <- aggregate_100(test_results_dummy)
+no_dummy_100 <- aggregate_100(test_results_no_dummy)
+
+data.frame(
+  model = c("Dummy", "No Dummy"),
+  RMSE  = c(sqrt(mean((dummy_100$actual_per_100 - dummy_100$predicted_per_100)^2)),
+            sqrt(mean((no_dummy_100$actual_per_100 - no_dummy_100$predicted_per_100)^2))),
+  R2    = c(r_squared(dummy_100$actual_per_100, dummy_100$predicted_per_100),
+            r_squared(no_dummy_100$actual_per_100, no_dummy_100$predicted_per_100))
+)
