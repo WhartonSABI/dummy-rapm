@@ -236,7 +236,7 @@ qualified_players <- play_by_play_data_small %>%
 
 # Adding dummy ids (number of dummys is the id number)
 
-play_by_play_data_small <- play_by_play_data_small %>%
+dummy_play_by_play_data <- play_by_play_data_small %>%
   mutate(
     home_lineup = lapply(home_lineup, function(lineup) {
       n_dummies <- sum(!lineup %in% qualified_players)
@@ -250,7 +250,7 @@ play_by_play_data_small <- play_by_play_data_small %>%
 
 # Number of dummies by count
 
-play_by_play_data_small %>%
+dummy_play_by_play_data %>%
   mutate(
     home_lineup = lapply(home_lineup, as.character),
     away_lineup = lapply(away_lineup, as.character)
@@ -268,7 +268,7 @@ play_by_play_data_small %>%
 #####################
 
 # Y vector - net points per possession
-y <- play_by_play_data_small %>%
+y <- dummy_play_by_play_data %>%
   group_by(game_id, possession_id) %>%
   summarise(
     home_points = sum(score_value[team_id == first(home_team_id)], na.rm = TRUE),
@@ -280,7 +280,7 @@ y <- play_by_play_data_small %>%
 
 # X matrix - +1 if home player, -1 if away player, 0 if not on court
 
-possession_lineups <- play_by_play_data_small %>%
+possession_lineups <- dummy_play_by_play_data %>%
   mutate(
     home_lineup = lapply(home_lineup, as.character),
     away_lineup = lapply(away_lineup, as.character)
@@ -300,32 +300,83 @@ X <- do.call(rbind, lapply(seq_len(nrow(possession_lineups)), function(i) {
 
 colnames(X) <- all_players
 
-########################
-### Ridge Regression ###
-########################
+
+#######################
+### No Dummy Matrix ###
+#######################
+
+possession_lineups_no_dummy <- play_by_play_data_small %>%
+  mutate(
+    home_lineup = lapply(home_lineup, as.character),
+    away_lineup = lapply(away_lineup, as.character)
+  ) %>%
+  group_by(game_id, possession_id) %>%
+  slice_head(n = 1) %>%
+  ungroup()
+
+# Only qualified players become columns
+all_players_no_dummy <- sort(qualified_players)
+
+X_no_dummy <- do.call(rbind, lapply(seq_len(nrow(possession_lineups_no_dummy)), function(i) {
+  home <- possession_lineups_no_dummy$home_lineup[[i]]
+  away <- possession_lineups_no_dummy$away_lineup[[i]]
+  as.integer(all_players_no_dummy %in% home) - as.integer(all_players_no_dummy %in% away)
+}))
+
+colnames(X_no_dummy) <- all_players_no_dummy
+
+################################
+### Splitting Train and Test ###
+################################
+
+n_possessions <- nrow(possession_lineups)
+train_idx <- sample(seq_len(n_possessions), size = floor(0.8 * n_possessions))
+test_idx  <- setdiff(seq_len(n_possessions), train_idx)
+
+###################
+### Dummy Split ###
+###################
+X_train       <- X[train_idx, ]
+X_test        <- X[test_idx, ]
+y_train       <- y[train_idx]
+y_test        <- y[test_idx]
+
+######################
+### No Dummy Split ###
+######################
+X_no_dummy_train <- X_no_dummy[train_idx, ]
+X_no_dummy_test  <- X_no_dummy[test_idx, ]
+# y is shared - same possessions, same net points
+y_no_dummy_train <- y[train_idx]
+y_no_dummy_test  <- y[test_idx]
+
+
+##############################
+### Dummy Ridge Regression ###
+##############################
 
 library(glmnet)
 
 # Ridge regression (alpha = 0)
-ridge_model <- cv.glmnet(X, y, alpha = 0)
+dummy_ridge_model <- cv.glmnet(X_train, y_train, alpha = 0)
 
 # Extracting coefficients at optimal lambda
-ridge_coef <- coef(ridge_model, s = "lambda.min")
+dummy_ridge_coef <- coef(dummy_ridge_model, s = "lambda.min")
 
 # Converting to a readable dataframe
-player_impact <- data.frame(
-  player_id = rownames(ridge_coef)[-1],  # remove intercept
-  impact = as.vector(ridge_coef)[-1]
+player_impact_dummy <- data.frame(
+  player_id = rownames(dummy_ridge_coef)[-1],  # remove intercept
+  impact = as.vector(dummy_ridge_coef)[-1]
 ) %>%
   arrange(desc(impact))
 
-player_impact
+player_impact_dummy
 
 # Adding Player names to impact
 
 library(stringr)
 
-player_names <- play_by_play_data_small %>%
+player_names_dummy <- dummy_play_by_play_data %>%
   select(athlete_id_1, text) %>%
   filter(!is.na(athlete_id_1), !is.na(text)) %>%
   mutate(
@@ -334,11 +385,62 @@ player_names <- play_by_play_data_small %>%
   distinct(athlete_id_1, .keep_all = TRUE) %>%
   select(athlete_id_1, player_name)
 
-player_impact <- player_impact %>%
-  left_join(player_names %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+player_impact_dummy <- player_impact_dummy %>%
+  left_join(player_names_dummy %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
             by = c("player_id" = "athlete_id_1"))
 
-player_impact
+player_impact_dummy
+
+#################################
+### No Dummy Ridge Regression ###
+#################################
+
+no_dummy_ridge_model <- cv.glmnet(X_no_dummy_train, y_no_dummy_train, alpha = 0)
+
+# Extracting coefficients at optimal lambda
+no_dummy_ridge_coef <- coef(no_dummy_ridge_model, s = "lambda.min")
+
+# Converting to a readable dataframe
+player_impact_no_dummy <- data.frame(
+  player_id = rownames(no_dummy_ridge_coef)[-1],
+  impact = as.vector(no_dummy_ridge_coef)[-1]
+) %>%
+  arrange(desc(impact))
+
+# Adding player names
+player_names_no_dummy <- play_by_play_data_small %>%
+  select(athlete_id_1, text) %>%
+  filter(!is.na(athlete_id_1), !is.na(text)) %>%
+  mutate(player_name = word(text, 1, 2)) %>%
+  distinct(athlete_id_1, .keep_all = TRUE) %>%
+  select(athlete_id_1, player_name)
+
+player_impact_no_dummy <- player_impact_no_dummy %>%
+  left_join(player_names_no_dummy %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+            by = c("player_id" = "athlete_id_1"))
+
+player_impact_no_dummy
+
+########################
+### Test Performance ###
+########################
+
+# Dummy model predictions on test set
+dummy_preds_test <- predict(dummy_ridge_model, newx = X_test, s = "lambda.min")
+dummy_rmse_test  <- sqrt(mean((y_test - dummy_preds_test)^2))
+dummy_mae_test   <- mean(abs(y_test - dummy_preds_test))
+
+# No dummy model predictions on test set
+no_dummy_preds_test <- predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")
+no_dummy_rmse_test  <- sqrt(mean((y_no_dummy_test - no_dummy_preds_test)^2))
+no_dummy_mae_test   <- mean(abs(y_no_dummy_test - no_dummy_preds_test))
+
+# Comparison table
+data.frame(
+  model    = c("Dummy", "No Dummy"),
+  RMSE     = c(dummy_rmse_test, no_dummy_rmse_test),
+  MAE      = c(dummy_mae_test, no_dummy_mae_test)
+)
 
 
 
