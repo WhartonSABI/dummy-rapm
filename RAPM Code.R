@@ -199,6 +199,23 @@ play_by_play_data_small %>%
   ) +
   theme_minimal()
 
+
+#######################################################
+### Taking a look at strangely low possession games ###
+#######################################################
+
+low_possession_games <- play_by_play_data_small %>%
+  group_by(game_id) %>%
+  summarise(total_possessions = max(possession_id)) %>%
+  arrange(total_possessions) %>%
+  filter(total_possessions < 100)
+
+play_by_play_data_small %>%
+  filter(game_id %in% low_possession_games$game_id) %>%
+  arrange(game_id, possession_id) %>%
+  View()
+
+
 ##################################
 ### Filtering out Garbage Time ###
 ##################################
@@ -348,10 +365,12 @@ X_no_dummy_sparse <- Matrix(X_no_dummy, sparse = TRUE)
 ###################
 ### Dummy Split ###
 ###################
+
 X_train <- X_sparse[train_idx, ]
 X_test  <- X_sparse[test_idx, ]
 y_train <- y[train_idx]
 y_test  <- y[test_idx]
+
 
 ######################
 ### No Dummy Split ###
@@ -483,7 +502,6 @@ combined_impact <- player_impact_dummy %>%
 
 ggplot(combined_impact, aes(x = impact_no_dummy, y = impact_dummy)) +
   geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = FALSE, color = "steelblue") +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
   labs(
     title = "Player Impact: Dummy vs No Dummy Ridge Regression",
