@@ -392,6 +392,9 @@ dummy_ridge_model <- cv.glmnet(X_train, y_train, alpha = 0)
 # Extracting coefficients at optimal lambda
 dummy_ridge_coef <- coef(dummy_ridge_model, s = "lambda.min")
 
+# Intercept (home advantage)
+dummy_ridge_coef["(Intercept)", ]
+
 # Converting to a readable dataframe
 player_impact_dummy <- data.frame(
   player_id = rownames(dummy_ridge_coef)[-1],  # remove intercept
@@ -425,6 +428,9 @@ player_impact_dummy
 #################################
 
 no_dummy_ridge_model <- cv.glmnet(X_no_dummy_train, y_no_dummy_train, alpha = 0)
+
+# Intercept (home advantage)
+no_dummy_ridge_coef["(Intercept)", ]
 
 # Extracting coefficients at optimal lambda
 no_dummy_ridge_coef <- coef(no_dummy_ridge_model, s = "lambda.min")
