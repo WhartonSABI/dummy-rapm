@@ -500,7 +500,7 @@ data.frame(
 combined_impact <- player_impact_dummy %>%
   inner_join(player_impact_no_dummy, by = "player_id", suffix = c("_dummy", "_no_dummy"))
 
-ggplot(combined_impact, aes(x = impact_no_dummy, y = impact_dummy)) +
+coefficient_comparison <- ggplot(combined_impact, aes(x = impact_no_dummy, y = impact_dummy)) +
   geom_point(alpha = 0.6) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
   labs(
@@ -510,3 +510,6 @@ ggplot(combined_impact, aes(x = impact_no_dummy, y = impact_dummy)) +
     caption = "Dashed line = perfect agreement (slope 1)"
   ) +
   theme_minimal()
+
+ggsave("coefficient_comparison_plot.png", coefficient_comparison,
+       width = 10, height = 8, dpi = 300)
