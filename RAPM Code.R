@@ -13,7 +13,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2023, 2024, 2025)
+seasons <- c(2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -361,7 +361,6 @@ X_no_dummy_test  <- X_no_dummy_sparse[test_idx, ]
 y_no_dummy_train <- y[train_idx]
 y_no_dummy_test  <- y[test_idx]
 
-
 ##############################
 ### Dummy Ridge Regression ###
 ##############################
@@ -436,56 +435,60 @@ player_impact_no_dummy
 ### Test Performance ###
 ########################
 
-# Individual Play Level Performance
-
-# R-squared
-r_squared <- function(actual, predicted) {
-  ss_res <- sum((actual - predicted)^2)
-  ss_tot <- sum((actual - mean(actual))^2)
-  1 - (ss_res / ss_tot)
-}
-
-dummy_r2    <- r_squared(y_test, dummy_preds_test)
-no_dummy_r2 <- r_squared(y_no_dummy_test, no_dummy_preds_test)
-
-data.frame(
-  model  = c("Dummy", "No Dummy"),
-  RMSE   = c(dummy_rmse_test, no_dummy_rmse_test),
-  R2     = c(dummy_r2, no_dummy_r2)
-)
-
-# Grouping into chunks of 100 possessions and aggregate
-
 test_results_dummy <- data.frame(
   possession  = test_idx,
   actual_y    = y_test,
   predicted_y = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min"))
 )
-
 test_results_no_dummy <- data.frame(
   possession  = test_idx,
   actual_y    = y_no_dummy_test,
   predicted_y = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min"))
 )
 
-aggregate_100 <- function(df) {
+aggregate_200 <- function(df) {
   df %>%
-    mutate(chunk = ceiling(seq_len(n()) / 100)) %>%
+    mutate(chunk = ceiling(seq_len(n()) / 200)) %>%
     group_by(chunk) %>%
     summarise(
-      actual_per_100    = sum(actual_y) / n() * 100,
-      predicted_per_100 = sum(predicted_y) / n() * 100,
+      actual_per_200    = sum(actual_y) / n() * 200,
+      predicted_per_200 = sum(predicted_y) / n() * 200,
       .groups = "drop"
     )
 }
 
-dummy_100    <- aggregate_100(test_results_dummy)
-no_dummy_100 <- aggregate_100(test_results_no_dummy)
+dummy_200    <- aggregate_200(test_results_dummy)
+no_dummy_200 <- aggregate_200(test_results_no_dummy)
+
+r_squared <- function(actual, predicted) {
+  ss_res <- sum((actual - predicted)^2)
+  ss_tot <- sum((actual - mean(actual))^2)
+  1 - (ss_res / ss_tot)
+}
 
 data.frame(
   model = c("Dummy", "No Dummy"),
-  RMSE  = c(sqrt(mean((dummy_100$actual_per_100 - dummy_100$predicted_per_100)^2)),
-            sqrt(mean((no_dummy_100$actual_per_100 - no_dummy_100$predicted_per_100)^2))),
-  R2    = c(r_squared(dummy_100$actual_per_100, dummy_100$predicted_per_100),
-            r_squared(no_dummy_100$actual_per_100, no_dummy_100$predicted_per_100))
+  RMSE  = c(sqrt(mean((dummy_200$actual_per_200 - dummy_200$predicted_per_200)^2)),
+            sqrt(mean((no_dummy_200$actual_per_200 - no_dummy_200$predicted_per_200)^2))),
+  R2    = c(r_squared(dummy_200$actual_per_200, dummy_200$predicted_per_200),
+            r_squared(no_dummy_200$actual_per_200, no_dummy_200$predicted_per_200))
 )
+
+#################################################
+### Plotting dummy vs no dummy player results ###
+#################################################
+
+combined_impact <- player_impact_dummy %>%
+  inner_join(player_impact_no_dummy, by = "player_id", suffix = c("_dummy", "_no_dummy"))
+
+ggplot(combined_impact, aes(x = impact_no_dummy, y = impact_dummy)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "steelblue") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray50") +
+  labs(
+    title = "Player Impact: Dummy vs No Dummy Ridge Regression",
+    x = "Impact (No Dummy)",
+    y = "Impact (Dummy)",
+    caption = "Dashed line = perfect agreement (slope 1)"
+  ) +
+  theme_minimal()
