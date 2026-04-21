@@ -519,3 +519,32 @@ coefficient_comparison <- ggplot(combined_impact, aes(x = impact_no_dummy, y = i
 
 ggsave("coefficient_comparison_plot.png", coefficient_comparison,
        width = 10, height = 8, dpi = 300)
+
+
+#############################################
+### Plotting distribution of coefficients ###
+#############################################
+
+# Combine into long format for overlaid distributions
+combined_long <- bind_rows(
+  player_impact_dummy %>% mutate(model = "Dummy"),
+  player_impact_no_dummy %>% mutate(model = "No Dummy")
+)
+
+distribution_overlay <- ggplot(combined_long, aes(x = impact, fill = model, color = model)) +
+  geom_density(alpha = 0.4, linewidth = 0.8) +
+  scale_fill_manual(values = c("Dummy" = "#2196F3", "No Dummy" = "#F44336")) +
+  scale_color_manual(values = c("Dummy" = "#1565C0", "No Dummy" = "#B71C1C")) +
+  labs(
+    title = "Distribution of Player Impact Coefficients",
+    subtitle = "Dummy vs No Dummy Ridge Regression",
+    x = "Impact Coefficient",
+    y = "Density",
+    fill = "Model",
+    color = "Model"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+
+ggsave("coefficient_distribution_overlay.png", distribution_overlay,
+       width = 10, height = 8, dpi = 300)
