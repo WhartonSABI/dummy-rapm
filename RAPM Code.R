@@ -491,13 +491,16 @@ r_squared <- function(actual, predicted) {
   1 - (ss_res / ss_tot)
 }
 
-data.frame(
+perf <- data.frame(
   model = c("Dummy", "No Dummy"),
   RMSE  = c(sqrt(mean((dummy_200$actual_per_200 - dummy_200$predicted_per_200)^2)),
             sqrt(mean((no_dummy_200$actual_per_200 - no_dummy_200$predicted_per_200)^2))),
   R2    = c(r_squared(dummy_200$actual_per_200, dummy_200$predicted_per_200),
             r_squared(no_dummy_200$actual_per_200, no_dummy_200$predicted_per_200))
 )
+
+perf
+cat("RMSE reduction:", round((perf$RMSE[2] - perf$RMSE[1]) / perf$RMSE[2] * 100, 2), "%\n")
 
 #################################################
 ### Plotting dummy vs no dummy player results ###
