@@ -553,21 +553,21 @@ ggsave("coefficient_distribution_overlay.png", distribution_overlay,
        width = 10, height = 8, dpi = 300)
 
 #################################
-### Top and Bottom 20 Players ###
+### Top and Bottom 10 Players ###
 #################################
 
 
-# Top and bottom 20 for no_dummy
+# Top and bottom 10 for no_dummy
 top_bottom_no_dummy <- player_impact_no_dummy %>%
   arrange(desc(impact)) %>%
-  slice(c(1:20, (n()-19):n())) %>%
+  slice(c(1:10, (n()-9):n())) %>%
   select(player_name, impact) %>%
   mutate(impact = round(impact, 4))
 
-# Top and bottom 20 for dummy
+# Top and bottom 10 for dummy
 top_bottom_dummy <- player_impact_dummy %>%
   arrange(desc(impact)) %>%
-  slice(c(1:20, (n()-19):n())) %>%
+  slice(c(1:10, (n()-9):n())) %>%
   select(player_name, impact) %>%
   mutate(impact = round(impact, 4))
 
