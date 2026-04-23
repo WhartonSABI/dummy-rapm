@@ -232,7 +232,8 @@ play_by_play_data_small <- play_by_play_data_small %>%
 # Literature has had filter at ~200 minutes played
 
 # ~200 possessions in a game
-p <- 2000
+# 2800 results in ~10 players per team that are qualified
+p <- 1000
 
 qualified_players <- play_by_play_data_small %>%
   group_by(game_id, possession_id) %>%
@@ -429,11 +430,11 @@ player_impact_dummy
 
 no_dummy_ridge_model <- cv.glmnet(X_no_dummy_train, y_no_dummy_train, alpha = 0)
 
-# Intercept (home advantage)
-no_dummy_ridge_coef["(Intercept)", ]
-
 # Extracting coefficients at optimal lambda
 no_dummy_ridge_coef <- coef(no_dummy_ridge_model, s = "lambda.min")
+
+# Intercept (home advantage)
+no_dummy_ridge_coef["(Intercept)", ]
 
 # Converting to a readable dataframe
 player_impact_no_dummy <- data.frame(
@@ -574,6 +575,13 @@ top_bottom_dummy <- player_impact_dummy %>%
 print(top_bottom_no_dummy)
 print(top_bottom_dummy)
 
+##########################
+### Dummy Coefficients ###
+##########################
 
+player_impact_dummy_filtered <- player_impact_dummy %>%
+  filter(player_id %in% 1:5)
+
+player_impact_dummy_filtered
 
 
