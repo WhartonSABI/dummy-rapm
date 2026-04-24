@@ -19,9 +19,15 @@ play_by_play_data <- load_nba_pbp(seasons)
 
 head(play_by_play_data)
 
+# Keep only regular season plays
+play_by_play_data <- play_by_play_data %>%
+  filter(season_type == 2)
+
+# Keep only actual nba teams (no all-star games)
+play_by_play_data <- play_by_play_data %>%
+  filter(team_id %in% (1:30))
 
 # Filtering for necessary columns
-
 play_by_play_data_small <- play_by_play_data %>%
   select(game_play_number, type_text, text, score_value, team_id, game_id,
          athlete_id_1, athlete_id_2, athlete_id_3, home_team_id, away_team_id,
