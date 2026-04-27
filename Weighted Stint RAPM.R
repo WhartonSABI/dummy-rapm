@@ -10,12 +10,13 @@ library(Matrix)
 library(glmnet)
 library(brms)
 library(ggplot2)
+library(stringr)
 
 set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2025)
+seasons <- c(2023, 2024, 2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -138,7 +139,8 @@ pbp_with_lineups_check <- play_by_play_data_small %>%
   mutate(first_play = row_number() == 1) %>%
   ungroup() %>%
   filter(first_play | type_text == "Substitution") %>%
-  select(game_id, team_id, game_play_number, type_text, athlete_id_1, athlete_id_2, updated_lineup)
+  select(game_id, team_id, game_play_number, type_text, 
+         athlete_id_1, athlete_id_2, updated_lineup)
 
 pbp_with_lineups_check <- pbp_with_lineups_check %>%
   filter(game_id == pbp_with_lineups_check$game_id[1], team_id == 5)
@@ -292,4 +294,205 @@ dummy_play_by_play_data %>%
 ### Changing from Possessions to Stints ###
 ###########################################
 
+dummy_play_by_play_data <- dummy_play_by_play_data %>%
+  mutate(
+    home_lineup_key = sapply(home_lineup, function(x) {
+      paste(sort(trimws(x[!is.na(x)])), collapse = "|")
+    }),
+    away_lineup_key = sapply(away_lineup, function(x) {
+      paste(sort(trimws(x[!is.na(x)])), collapse = "|")
+    }),
+    lineup_pair = paste(home_lineup_key, away_lineup_key, sep = "||")
+  )
+
+# Detect stint breaks: a new stint starts when either lineup changes
+dummy_play_by_play_data <- dummy_play_by_play_data %>%
+  mutate(
+    lineup_change = lineup_pair != lag(lineup_pair, default = first(lineup_pair)),
+    stint_id = cumsum(lineup_change)
+  )
+
+# Build stint summary — one row per stint
+stints <- dummy_play_by_play_data %>%
+  group_by(game_id, stint_id) %>%
+  summarise(
+    home_lineup    = first(home_lineup_key),
+    away_lineup    = first(away_lineup_key),
+    n_possessions  = sum(possession_end, na.rm = TRUE),
+    start_points_home = first(home_score),
+    end_points_home   = last(home_score),
+    start_points_away = first(away_score),
+    end_points_away   = last(away_score),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    home_net_points = (end_points_home - start_points_home) 
+    - (end_points_away - start_points_away)
+  ) %>%
+  select(game_id, stint_id, home_lineup, away_lineup,
+         n_possessions, home_net_points)
+
+# Filtering out no possession stints (just multiple substitutions)
+
+stints <- stints %>%
+  filter(n_possessions > 0)
+
+#####################
+### Making Matrix ###
+#####################
+
+y <- stints %>%
+  mutate(net_points_per_possession = 100 * home_net_points / n_possessions) %>%
+  pull(net_points_per_possession)
+
+# Weights (by number of possessions in the stint)
+
+w <- stints %>% pull(n_possessions)
+
+
+# Get all unique players across all stints
+all_players <- sort(unique(c(
+  unlist(strsplit(stints$home_lineup, "\\|")),
+  unlist(strsplit(stints$away_lineup, "\\|"))
+)))
+
+# X matrix - +1 if home player, -1 if away player, 0 if not on court
+X <- do.call(rbind, lapply(seq_len(nrow(stints)), function(i) {
+  home <- strsplit(stints$home_lineup[i], "\\|")[[1]]
+  away <- strsplit(stints$away_lineup[i], "\\|")[[1]]
+  as.integer(all_players %in% home) - as.integer(all_players %in% away)
+}))
+
+colnames(X) <- all_players
+
+#######################
+### No Dummy Matrix ###
+#######################
+
+# Only qualified players become columns
+all_players_no_dummy <- sort(qualified_players)
+
+X_no_dummy <- do.call(rbind, lapply(seq_len(nrow(stints)), function(i) {
+  home <- strsplit(stints$home_lineup[i], "\\|")[[1]]
+  away <- strsplit(stints$away_lineup[i], "\\|")[[1]]
+  as.integer(all_players_no_dummy %in% home) - as.integer(all_players_no_dummy %in% away)
+}))
+
+colnames(X_no_dummy) <- all_players_no_dummy
+
+################################
+### Splitting Train and Test ###
+################################
+
+n_stints <- nrow(X)
+train_size    <- floor(0.8 * n_stints)
+
+train_idx <- seq_len(train_size)
+test_idx  <- seq(train_size + 1, n_stints)
+
+w_train <- w[train_idx]
+w_test  <- w[test_idx]
+
+############################
+### Making Sparse Matrix ###
+############################
+
+library(Matrix)
+
+# Convert to sparse BEFORE splitting (much more memory efficient)
+X_sparse          <- Matrix(X, sparse = TRUE)
+X_no_dummy_sparse <- Matrix(X_no_dummy, sparse = TRUE)
+
+###################
+### Dummy Split ###
+###################
+
+X_train <- X_sparse[train_idx, ]
+X_test  <- X_sparse[test_idx, ]
+y_train <- y[train_idx]
+y_test  <- y[test_idx]
+
+######################
+### No Dummy Split ###
+######################
+X_no_dummy_train <- X_no_dummy_sparse[train_idx, ]
+X_no_dummy_test  <- X_no_dummy_sparse[test_idx, ]
+y_no_dummy_train <- y[train_idx]
+y_no_dummy_test  <- y[test_idx]
+
+##############################
+### Dummy Ridge Regression ###
+##############################
+
+library(glmnet)
+
+# Ridge regression (alpha = 0)
+dummy_ridge_model <- cv.glmnet(X_train, y_train, alpha = 0, weights = w_train)
+
+# Extracting coefficients at optimal lambda
+dummy_ridge_coef <- coef(dummy_ridge_model, s = "lambda.min")
+
+# Intercept (home advantage)
+dummy_ridge_coef["(Intercept)", ]
+
+# Converting to a readable dataframe
+player_impact_dummy <- data.frame(
+  player_id = rownames(dummy_ridge_coef)[-1],  # remove intercept
+  impact = as.vector(dummy_ridge_coef)[-1]
+) %>%
+  arrange(desc(impact))
+
+player_impact_dummy
+
+# Adding Player names to impact
+
+library(stringr)
+
+player_names_dummy <- dummy_play_by_play_data %>%
+  select(athlete_id_1, text) %>%
+  filter(!is.na(athlete_id_1), !is.na(text)) %>%
+  mutate(
+    player_name = word(text, 1, 2)  # first two words
+  ) %>%
+  distinct(athlete_id_1, .keep_all = TRUE) %>%
+  select(athlete_id_1, player_name)
+
+player_impact_dummy <- player_impact_dummy %>%
+  left_join(player_names_dummy %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+            by = c("player_id" = "athlete_id_1"))
+
+player_impact_dummy
+
+#################################
+### No Dummy Ridge Regression ###
+#################################
+
+no_dummy_ridge_model <- cv.glmnet(X_no_dummy_train, y_no_dummy_train, alpha = 0, weights = w_train)
+
+# Extracting coefficients at optimal lambda
+no_dummy_ridge_coef <- coef(no_dummy_ridge_model, s = "lambda.min")
+
+# Intercept (home advantage)
+no_dummy_ridge_coef["(Intercept)", ]
+
+# Converting to a readable dataframe
+player_impact_no_dummy <- data.frame(
+  player_id = rownames(no_dummy_ridge_coef)[-1],
+  impact = as.vector(no_dummy_ridge_coef)[-1]
+) %>%
+  arrange(desc(impact))
+
+# Adding player names
+player_names_no_dummy <- play_by_play_data_small %>%
+  select(athlete_id_1, text) %>%
+  filter(!is.na(athlete_id_1), !is.na(text)) %>%
+  mutate(player_name = word(text, 1, 2)) %>%
+  distinct(athlete_id_1, .keep_all = TRUE) %>%
+  select(athlete_id_1, player_name)
+
+player_impact_no_dummy <- player_impact_no_dummy %>%
+  left_join(player_names_no_dummy %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+            by = c("player_id" = "athlete_id_1"))
+
+player_impact_no_dummy
 
