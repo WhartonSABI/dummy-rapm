@@ -341,8 +341,7 @@ stints <- stints %>%
 #####################
 
 y <- stints %>%
-  mutate(net_points_per_possession = 100 * home_net_points / n_possessions) %>%
-  pull(net_points_per_possession)
+  pull(home_net_points)
 
 # Weights (by number of possessions in the stint)
 
