@@ -420,11 +420,12 @@ player_impact_dummy
 library(stringr)
 
 player_names_dummy <- dummy_play_by_play_data %>%
-  select(athlete_id_1, text) %>%
-  filter(!is.na(athlete_id_1), !is.na(text)) %>%
-  mutate(
-    player_name = word(text, 1, 2)  # first two words
+  filter(
+    !is.na(athlete_id_1),
+    !is.na(text),
+    str_detect(type_text, "Free Throw")   # keep only free throw rows (since we know first two words refere to that player)
   ) %>%
+  mutate(player_name = word(text, 1, 2)) %>%
   distinct(athlete_id_1, .keep_all = TRUE) %>%
   select(athlete_id_1, player_name)
 
@@ -455,8 +456,11 @@ player_impact_no_dummy <- data.frame(
 
 # Adding player names
 player_names_no_dummy <- play_by_play_data_small %>%
-  select(athlete_id_1, text) %>%
-  filter(!is.na(athlete_id_1), !is.na(text)) %>%
+  filter(
+    !is.na(athlete_id_1),
+    !is.na(text),
+    str_detect(type_text, "Free Throw")   # keep only free throw rows (since we know first two words refere to that player)
+  ) %>%
   mutate(player_name = word(text, 1, 2)) %>%
   distinct(athlete_id_1, .keep_all = TRUE) %>%
   select(athlete_id_1, player_name)
