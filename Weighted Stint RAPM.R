@@ -242,8 +242,7 @@ play_by_play_data_small <- play_by_play_data_small %>%
 # Literature has had filter at ~200 minutes played
 
 # ~200 possessions in a game
-# 2800 results in ~10 players per team that are qualified
-p <- 1000
+p <- 3000
 
 qualified_players <- play_by_play_data_small %>%
   group_by(game_id, possession_id) %>%
@@ -495,4 +494,38 @@ player_impact_no_dummy <- player_impact_no_dummy %>%
             by = c("player_id" = "athlete_id_1"))
 
 player_impact_no_dummy
+
+########################
+### Test Performance ###
+########################
+
+test_results_dummy <- data.frame(
+  possession  = test_idx,
+  actual_y    = y_test,
+  predicted_y = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min")),
+  weight      = w_test
+)
+test_results_no_dummy <- data.frame(
+  possession  = test_idx,
+  actual_y    = y_no_dummy_test,
+  predicted_y = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")),
+  weight      = w_test
+)
+
+weighted_r_squared <- function(actual, predicted, w) {
+  ss_res <- sum(w * (actual - predicted)^2)
+  ss_tot <- sum(w * (actual - weighted.mean(actual, w))^2)
+  1 - (ss_res / ss_tot)
+}
+
+weighted_rmse <- function(actual, predicted, w) {
+  sqrt(weighted.mean((actual - predicted)^2, w))
+}
+
+weighted_r_squared(test_results_dummy$actual_y, test_results_dummy$predicted_y, test_results_dummy$weight)
+weighted_r_squared(test_results_no_dummy$actual_y, test_results_no_dummy$predicted_y, test_results_no_dummy$weight)
+
+weighted_rmse(test_results_dummy$actual_y, test_results_dummy$predicted_y, test_results_dummy$weight)
+weighted_rmse(test_results_no_dummy$actual_y, test_results_no_dummy$predicted_y, test_results_no_dummy$weight)
+
 
