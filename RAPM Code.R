@@ -179,11 +179,11 @@ play_by_play_data_small <- play_by_play_data_small %>%
       # Defensive rebound (missed shot rebounded by defense)
       type_text == "Defensive Rebound" ~ TRUE,
       
-      # Last free throw of a sequence
+      # Last free throw of a sequence (only ends possession if made)
       type_text %in% c("Free Throw - 1 of 1", "Free Throw - 2 of 2", 
                        "Free Throw - 3 of 3", "Free Throw - Flagrant 1 of 1",
                        "Free Throw - Flagrant 2 of 2", "Free Throw - Flagrant 3 of 3",
-                       "Free Throw - Clear Path 2 of 2") ~ TRUE,
+                       "Free Throw - Clear Path 2 of 2") & score_value > 0 ~ TRUE,
       
       # Turnovers (excluding No Turnover)
       grepl("Turnover", type_text) & type_text != "No Turnover" ~ TRUE,
