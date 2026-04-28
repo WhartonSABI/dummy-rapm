@@ -27,6 +27,10 @@ play_by_play_data <- play_by_play_data %>%
 play_by_play_data <- play_by_play_data %>%
   filter(team_id %in% (1:30))
 
+# Sort by game date (earliest games first)
+play_by_play_data <- play_by_play_data %>%
+  arrange(game_date)
+
 # Filtering for necessary columns
 play_by_play_data_small <- play_by_play_data %>%
   select(game_play_number, type_text, text, score_value, team_id, game_id,
