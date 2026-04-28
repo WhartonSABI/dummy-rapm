@@ -500,20 +500,20 @@ player_impact_no_dummy
 ########################
 
 test_results_dummy <- data.frame(
-  possession  = test_idx,
+  stint  = test_idx,
   actual_y    = y_test,
   predicted_y = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min")),
   weight      = w_test
 )
 test_results_no_dummy <- data.frame(
-  possession  = test_idx,
+  stint  = test_idx,
   actual_y    = y_no_dummy_test,
   predicted_y = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")),
   weight      = w_test
 )
 
 weighted_r_squared <- function(actual, predicted, w) {
-  ss_res <- sum(w * (actual - predicted)^2)
+  ss_res <- sum((actual - predicted)^2)
   ss_tot <- sum(w * (actual - weighted.mean(actual, w))^2)
   1 - (ss_res / ss_tot)
 }
