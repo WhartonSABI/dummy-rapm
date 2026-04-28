@@ -16,7 +16,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2023, 2024, 2025)
+seasons <- c(2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -242,7 +242,7 @@ play_by_play_data_small <- play_by_play_data_small %>%
 # Literature has had filter at ~200 minutes played
 
 # ~200 possessions in a game
-p <- 3000
+p <- 1000
 
 qualified_players <- play_by_play_data_small %>%
   group_by(game_id, possession_id) %>%
@@ -346,7 +346,6 @@ y <- stints %>%
 # Weights (by number of possessions in the stint)
 
 w <- stints %>% pull(n_possessions)
-
 
 # Get all unique players across all stints
 all_players <- sort(unique(c(
@@ -498,33 +497,53 @@ player_impact_no_dummy
 ### Test Performance ###
 ########################
 
-test_results_dummy <- data.frame(
-  stint  = test_idx,
-  actual_y    = y_test,
-  predicted_y = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min")),
-  weight      = w_test
-)
-test_results_no_dummy <- data.frame(
-  stint  = test_idx,
-  actual_y    = y_no_dummy_test,
-  predicted_y = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")),
-  weight      = w_test
-)
-
-weighted_r_squared <- function(actual, predicted, w) {
+r_squared <- function(actual, predicted) {
   ss_res <- sum((actual - predicted)^2)
-  ss_tot <- sum(w * (actual - weighted.mean(actual, w))^2)
+  ss_tot <- sum((actual - mean(actual))^2)
   1 - (ss_res / ss_tot)
 }
 
-weighted_rmse <- function(actual, predicted, w) {
-  sqrt(weighted.mean((actual - predicted)^2, w))
-}
+test_results_dummy <- data.frame(
+  game_id       = stints$game_id[test_idx],
+  actual_points = stints$home_net_points[test_idx],
+  actual_y      = y_test,
+  predicted_y   = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min")),
+  weight        = w_test
+) %>%
+  mutate(
+    predicted_margin_contrib = predicted_y * weight / 100
+  ) %>%
+  group_by(game_id) %>%
+  summarise(
+    actual_margin    = sum(actual_points),
+    predicted_margin = sum(predicted_margin_contrib)
+  )
 
-weighted_r_squared(test_results_dummy$actual_y, test_results_dummy$predicted_y, test_results_dummy$weight)
-weighted_r_squared(test_results_no_dummy$actual_y, test_results_no_dummy$predicted_y, test_results_no_dummy$weight)
+test_results_no_dummy <- data.frame(
+  game_id       = stints$game_id[test_idx],
+  actual_points = stints$home_net_points[test_idx],
+  actual_y      = y_no_dummy_test,
+  predicted_y   = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")),
+  weight        = w_test
+) %>%
+  mutate(
+    predicted_margin_contrib = predicted_y * weight / 100
+  ) %>%
+  group_by(game_id) %>%
+  summarise(
+    actual_margin    = sum(actual_points),
+    predicted_margin = sum(predicted_margin_contrib)
+  )
 
-weighted_rmse(test_results_dummy$actual_y, test_results_dummy$predicted_y, test_results_dummy$weight)
-weighted_rmse(test_results_no_dummy$actual_y, test_results_no_dummy$predicted_y, test_results_no_dummy$weight)
-
-
+perf <- data.frame(
+  model = c("Dummy", "No Dummy"),
+  RMSE  = c(
+    sqrt(mean((test_results_dummy$actual_margin - test_results_dummy$predicted_margin)^2)),
+    sqrt(mean((test_results_no_dummy$actual_margin - test_results_no_dummy$predicted_margin)^2))
+  ),
+  R2 = c(
+    r_squared(test_results_dummy$actual_margin, test_results_dummy$predicted_margin),
+    r_squared(test_results_no_dummy$actual_margin, test_results_no_dummy$predicted_margin)
+  )
+)
+perf
