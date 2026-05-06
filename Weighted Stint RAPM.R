@@ -38,7 +38,7 @@ play_by_play_data <- play_by_play_data %>%
 play_by_play_data_small <- play_by_play_data %>%
   select(game_play_number, type_text, text, score_value, team_id, game_id,
          athlete_id_1, athlete_id_2, athlete_id_3, home_team_id, away_team_id,
-         start_game_seconds_remaining, away_score, home_score)
+         start_game_seconds_remaining, away_score, home_score, game_date)
 
 head(play_by_play_data_small)
 
@@ -331,6 +331,7 @@ stints <- dummy_play_by_play_data %>%
     end_points_home   = last(home_score),
     start_points_away = first(away_score),
     end_points_away   = last(away_score),
+    game_date         = first(game_date),
     .groups = "drop"
   ) %>%
   mutate(
@@ -338,12 +339,17 @@ stints <- dummy_play_by_play_data %>%
     - (end_points_away - start_points_away)
   ) %>%
   select(game_id, stint_id, home_lineup, away_lineup,
-         n_possessions, home_net_points)
+         n_possessions, home_net_points, game_date)
 
 # Filtering out no possession stints (just multiple substitutions)
 
 stints <- stints %>%
   filter(n_possessions > 0)
+
+# Ordering stints
+
+stints <- stints %>%
+  arrange(game_date, stint_id)
 
 #####################
 ### Making Matrix ###
@@ -523,13 +529,10 @@ test_results_dummy <- data.frame(
   predicted_y   = as.vector(predict(dummy_ridge_model, newx = X_test, s = "lambda.min")),
   weight        = w_test
 ) %>%
-  mutate(
-    predicted_margin_contrib = predicted_y * weight / 100
-  ) %>%
   group_by(game_id) %>%
   summarise(
     actual_margin    = sum(actual_points),
-    predicted_margin = sum(predicted_margin_contrib)
+    predicted_margin = sum(predicted_y)
   )
 
 test_results_no_dummy <- data.frame(
@@ -539,13 +542,10 @@ test_results_no_dummy <- data.frame(
   predicted_y   = as.vector(predict(no_dummy_ridge_model, newx = X_no_dummy_test, s = "lambda.min")),
   weight        = w_test
 ) %>%
-  mutate(
-    predicted_margin_contrib = predicted_y * weight / 100
-  ) %>%
   group_by(game_id) %>%
   summarise(
     actual_margin    = sum(actual_points),
-    predicted_margin = sum(predicted_margin_contrib)
+    predicted_margin = sum(predicted_y)
   )
 
 perf <- data.frame(
