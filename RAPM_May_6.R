@@ -16,7 +16,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2024, 2025)
+seasons <- c(2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -235,28 +235,21 @@ play_by_play_data_small %>%
   View()
 
 
-##################################
-### Filtering out Garbage Time ###
-##################################
+############################
+### Filtering for scrubs ###
+############################
 
-play_by_play_data_small <- play_by_play_data_small %>%
-  mutate(score_difference = abs(home_score - away_score)) %>%
-  filter(!(score_difference > 15 & start_game_seconds_remaining < 120))
-
-
-################################################
-### Filtering for players with p possessions ###
-################################################
-
-# Literature has had filter at ~200 minutes played
-
-# ~200 possessions in a game
-p <- 1000
-
-qualified_players <- play_by_play_data_small %>%
-  group_by(game_id, possession_id) %>%
-  slice_head(n = 1) %>%
+player_game_seconds <- play_by_play_data_small %>%
+  # Step 1: isolate possession-ending rows and calculate duration
+  filter(possession_end == TRUE) %>%
+  group_by(game_id) %>%
+  arrange(game_play_number) %>%
+  mutate(
+    prev_seconds_remaining = lag(start_game_seconds_remaining, default = 2880),
+    possession_duration    = prev_seconds_remaining - start_game_seconds_remaining
+  ) %>%
   ungroup() %>%
+  # Step 2: expand to one row per player per possession
   mutate(
     home_lineup = lapply(home_lineup, as.character),
     away_lineup = lapply(away_lineup, as.character)
@@ -265,9 +258,70 @@ qualified_players <- play_by_play_data_small %>%
   mutate(all_players = list(c(home_lineup, away_lineup))) %>%
   ungroup() %>%
   unnest(all_players) %>%
+  # Step 3: sum duration per player per game
+  group_by(game_id, all_players) %>%
+  summarise(
+    total_seconds = sum(possession_duration, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(total_minutes = total_seconds / 60)
+
+player_avg_minutes <- player_game_seconds %>%
   group_by(all_players) %>%
-  summarise(total_possessions = n()) %>%
-  filter(total_possessions >= p) %>%
+  summarise(
+    games_played  = n(),
+    avg_minutes   = mean(total_minutes, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_minutes))
+
+# Average player minutes graph
+
+ggplot(player_avg_minutes, aes(x = avg_minutes)) +
+  geom_density(fill = "steelblue", alpha = 0.7) +
+  labs(
+    title = "Distribution of Average Minutes Played Per Game",
+    x     = "Average Minutes Per Game",
+    y     = "Density"
+  ) +
+  theme_minimal()
+
+ggplot(player_avg_minutes, aes(x = avg_minutes)) +
+  geom_histogram(fill = "steelblue", alpha = 0.7, bins = 30) +
+  labs(
+    title = "Distribution of Average Minutes Played Per Game",
+    x     = "Average Minutes Per Game",
+    y     = "Count"
+  ) +
+  theme_minimal()
+
+# Median player minutes graph
+
+player_median_minutes <- player_game_seconds %>%
+  group_by(all_players) %>%
+  summarise(
+    games_played   = n(),
+    median_minutes = median(total_minutes, na.rm = TRUE)
+  )
+
+ggplot(player_median_minutes, aes(x = median_minutes)) +
+  geom_histogram(fill = "steelblue", alpha = 0.7, bins = 30) +
+  labs(
+    title = "Distribution of Median Minutes Played Per Game",
+    x     = "Median Minutes Per Game",
+    y     = "Count"
+  ) +
+  theme_minimal()
+
+# Filtering out players
+
+# Average less than x mins per game
+#qualified_players <- player_avg_minutes %>%
+#  filter(avg_minutes > 5) %>%
+#  pull(all_players)
+
+# Median minutes less than x and more than y games played
+qualified_players <- player_median_minutes %>%
+  filter(median_minutes >= 10, games_played > 10) %>%
   pull(all_players)
 
 # Adding dummy ids (number of dummys is the id number)
@@ -559,4 +613,5 @@ perf <- data.frame(
     r_squared(test_results_no_dummy$actual_margin, test_results_no_dummy$predicted_margin)
   )
 )
+
 perf
