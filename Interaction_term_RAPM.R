@@ -485,6 +485,32 @@ X <- do.call(rbind, lapply(seq_len(nrow(stints)), function(i) {
 
 colnames(X) <- all_players
 
+################################
+### Adding interaction terms ###
+################################
+
+# Build interaction columns for each pair
+pair_matrix <- do.call(cbind, lapply(seq_len(nrow(player_pairs)), function(i) {
+  p1 <- player_pairs$player1[i]
+  p2 <- player_pairs$player2[i]
+  col_name <- paste0("pair_", p1, "_", p2)
+  
+  col <- sapply(seq_len(nrow(stints)), function(j) {
+    home <- strsplit(stints$home_lineup[j], "\\|")[[1]]
+    away <- strsplit(stints$away_lineup[j], "\\|")[[1]]
+    
+    both_home <- p1 %in% home & p2 %in% home
+    both_away <- p1 %in% away & p2 %in% away
+    
+    as.integer(both_home) - as.integer(both_away)
+  })
+  
+  matrix(col, ncol = 1, dimnames = list(NULL, col_name))
+}))
+
+# Append to existing X matrix
+X <- cbind(X, pair_matrix)
+
 #######################
 ### No Dummy Matrix ###
 #######################
@@ -499,6 +525,9 @@ X_no_dummy <- do.call(rbind, lapply(seq_len(nrow(stints)), function(i) {
 }))
 
 colnames(X_no_dummy) <- all_players_no_dummy
+
+# Adding interactions
+X_no_dummy <- cbind(X_no_dummy, pair_matrix)
 
 ################################
 ### Splitting Train and Test ###
