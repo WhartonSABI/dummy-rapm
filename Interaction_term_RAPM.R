@@ -321,7 +321,7 @@ ggplot(player_median_minutes, aes(x = median_minutes)) +
 
 # Median minutes less than x and more than y games played
 qualified_players <- player_median_minutes %>%
-  filter(median_minutes >= 10, games_played > 10) %>%
+  filter(median_minutes >= 10, games_played > 20) %>%
   pull(all_players)
 
 # Adding dummy ids (number of dummys is the id number)
