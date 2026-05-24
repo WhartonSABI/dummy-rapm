@@ -1,0 +1,25 @@
+source("scripts/00_functions.R")
+
+pbp <- read_parquet_tbl("data/01_raw-nba-pbp-2024-2025.parquet")
+pbp_engineered <- build_lineups_and_possessions(pbp)
+
+pbp_engineered_parquet <- pbp_engineered %>%
+  mutate(
+    starting_five = lineup_list_to_str(starting_five),
+    updated_lineup = lineup_list_to_str(updated_lineup),
+    home_lineup = lineup_list_to_str(home_lineup),
+    away_lineup = lineup_list_to_str(away_lineup)
+  )
+
+write_parquet_tbl(pbp_engineered_parquet, "data/02_pbp-lineups-possessions.parquet")
+
+qualified_possessions <- tibble(player_id = get_qualified_players_possessions(pbp_engineered, min_possessions = 1000))
+qualified_minutes <- tibble(player_id = get_qualified_players_minutes(pbp_engineered, min_median_minutes = 10, min_games = 20))
+
+write_parquet_tbl(qualified_possessions, "data/02_qualified-players-possessions.parquet")
+write_parquet_tbl(qualified_minutes, "data/02_qualified-players-minutes.parquet")
+
+stints <- build_stints(pbp_engineered)
+write_parquet_tbl(stints, "data/02_stints.parquet")
+
+cat("Saved engineered PBP and derived parquet artifacts in data/\n")
