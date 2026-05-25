@@ -16,7 +16,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2022)
+seasons <- c(2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
