@@ -42,9 +42,63 @@ play_by_play_data_small <- play_by_play_data %>%
 
 head(play_by_play_data_small)
 
-##############################
-### Getting Starting Fives ###
-##############################
+############################
+### Defining Possessions ###
+############################
+
+
+play_by_play_data_small <- play_by_play_data_small %>%
+  group_by(game_id, period_number) %>%
+  mutate(last_in_period = row_number() == n()) %>%
+  ungroup() %>%
+  mutate(
+    possession_end = case_when(
+      # End of period
+      last_in_period ~ TRUE,
+      
+      # Made field goals
+      score_value > 0 & grepl("Shot|Dunk|Layup", type_text) ~ TRUE,
+      
+      # Defensive rebound
+      type_text == "Defensive Rebound" ~ TRUE,
+      
+      # Last free throw of a sequence
+      type_text %in% c("Free Throw - 1 of 1", "Free Throw - 2 of 2", 
+                       "Free Throw - 3 of 3", "Free Throw - Flagrant 1 of 1",
+                       "Free Throw - Flagrant 2 of 2", "Free Throw - Flagrant 3 of 3",
+                       "Free Throw - Clear Path 2 of 2") & score_value > 0 ~ TRUE,
+      
+      # Travel ends the possession
+      type_text == "Traveling" ~ TRUE,
+      
+      # Turnovers (excluding No Turnover)
+      grepl("Turnover", type_text) & type_text != "No Turnover" ~ TRUE,
+      
+      TRUE ~ FALSE
+    )
+  ) %>%
+  group_by(game_id) %>%
+  mutate(possession_id = lag(cumsum(possession_end), default = 0) + 1) %>%
+  ungroup()
+
+
+# Showing Number of Possessions in a game
+
+play_by_play_data_small %>%
+  group_by(game_id) %>%
+  summarise(total_possessions = max(possession_id)) %>%
+  ggplot(aes(x = total_possessions)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of Possessions per Game",
+    x = "Total Possessions",
+    y = "Number of Games"
+  ) +
+  theme_minimal()
+
+##############################################
+### Getting Starting Fives in each quarter ###
+##############################################
 
 # We remove rows with all NAs, and filter for the first 5 athletes that appear
 # for each team in each game (in theory if a player is subbed early he won't appear)
@@ -52,17 +106,17 @@ head(play_by_play_data_small)
 start_five <- play_by_play_data_small %>%
   filter(!if_all(c(athlete_id_1, athlete_id_2, athlete_id_3), ~ is.na(.))) %>%
   filter(!if_any(c(team_id, game_id), ~ is.na(.))) %>%
-  group_by(game_id, team_id) %>%
+  group_by(game_id, team_id, period_number) %>%
   arrange(game_play_number) %>%
   distinct(athlete_id_1, .keep_all = TRUE) %>%
   slice_head(n = 5) %>%
   summarise(starting_five = list(athlete_id_1), .groups = "drop")
 
-# Adding Starting Lineups to first play
+# Adding Starting Lineups to first play of each quarter
 
 play_by_play_data_small <- play_by_play_data_small %>%
-  left_join(start_five, by = c("game_id", "team_id")) %>%
-  group_by(game_id, team_id) %>%
+  left_join(start_five, by = c("game_id", "team_id", "period_number")) %>%
+  group_by(game_id, team_id, period_number) %>%
   mutate(
     starting_five = if_else(row_number() == 1, starting_five, NA)
   ) %>%
@@ -73,7 +127,6 @@ play_by_play_data_small <- play_by_play_data_small %>%
 ##############################
 
 # Switching Players when Substituted
-
 play_by_play_data_small <- play_by_play_data_small %>%
   mutate(starting_five = map(starting_five, ~ if (is.null(.x)) NA else .x))
 
@@ -98,7 +151,7 @@ for (grp in lineup_changes) {
     } else if (i > 1 && !is.null(updated_lineups[[i - 1]])) {
       updated_lineups[[i]] <- updated_lineups[[i - 1]]
     } else {
-      updated_lineups[[i]] <- NA  # Still nothing to carry
+      updated_lineups[[i]] <- NA
     }
     
     # If it's a substitution, try replacing the players
@@ -106,14 +159,29 @@ for (grp in lineup_changes) {
         !is.na(grp$athlete_id_1[i]) && !is.na(grp$athlete_id_2[i]) &&
         !all(is.na(updated_lineups[[i]]))) {
       
-      out_player <- grp$athlete_id_2[i]
-      in_player  <- grp$athlete_id_1[i]
+      out_player  <- as.character(grp$athlete_id_2[i])
+      in_player   <- as.character(grp$athlete_id_1[i])
+      lineup      <- as.character(updated_lineups[[i]])
       
-      lineup <- as.character(updated_lineups[[i]])
-      idx <- which(lineup == out_player)
-      if (length(idx) > 0) {
+      in_already  <- in_player  %in% lineup
+      out_present <- out_player %in% lineup
+      
+      if (in_already && out_present) {
+        # In-player already on court — just remove the out-player
+        lineup <- lineup[lineup != out_player]
+        updated_lineups[[i]] <- lineup
+        
+      } else if (in_already && !out_present) {
+        # In-player already there, out-player not found — lineup already correct, skip
+        
+      } else if (!in_already && out_present) {
+        # Normal case — swap out for in
+        idx <- which(lineup == out_player)
         lineup[idx] <- in_player
         updated_lineups[[i]] <- lineup
+        
+      } else {
+        # Neither found — lineup is stale, skip
       }
     }
   }
@@ -165,69 +233,66 @@ play_by_play_data_small <- play_by_play_data_small %>%
       TRUE ~ NA
     )
   ) %>%
-  group_by(game_id) %>%
+  group_by(game_id, period_number) %>%
   tidyr::fill(home_lineup, away_lineup, .direction = "down") %>%
   tidyr::fill(home_lineup, away_lineup, .direction = "up") %>%
   ungroup()
 
-############################
-### Defining Possessions ###
-############################
+###############################################
+### Correcting Substitutions Mid-Free-Throw ###
+###############################################
 
 
-play_by_play_data_small <- play_by_play_data_small %>%
-  group_by(game_id, period_number) %>%
-  mutate(last_in_period = row_number() == n()) %>%
-  ungroup() %>%
+# Parse FT attempt and total directly from type_text
+ft_info <- play_by_play_data_small %>%
+  filter(grepl("Free Throw", type_text), type_text != "Free Throw - Technical") %>%
   mutate(
-    possession_end = case_when(
-      # End of period
-      last_in_period ~ TRUE,
-      
-      # Made field goals
-      score_value > 0 & grepl("Shot|Dunk|Layup", type_text) ~ TRUE,
-      
-      # Defensive rebound
-      type_text == "Defensive Rebound" ~ TRUE,
-      
-      # Last free throw of a sequence
-      type_text %in% c("Free Throw - 1 of 1", "Free Throw - 2 of 2", 
-                       "Free Throw - 3 of 3", "Free Throw - Flagrant 1 of 1",
-                       "Free Throw - Flagrant 2 of 2", "Free Throw - Flagrant 3 of 3",
-                       "Free Throw - Clear Path 2 of 2") & score_value > 0 ~ TRUE,
-      
-      # Travel ends the possession
-      type_text == "Traveling" ~ TRUE,
-      
-      # Turnovers (excluding No Turnover)
-      grepl("Turnover", type_text) & type_text != "No Turnover" ~ TRUE,
-      
-      TRUE ~ FALSE
-    )
-  ) %>%
+    ft_attempt = as.integer(gsub(".*(\\d) of (\\d).*", "\\1", type_text)),
+    ft_total   = as.integer(gsub(".*(\\d) of (\\d).*", "\\2", type_text))
+  )
+
+# Snapshot lineups at FT 1-of-N
+ft_first <- ft_info %>%
+  filter(ft_attempt == 1L, ft_total >= 2L) %>%
   group_by(game_id) %>%
-  mutate(possession_id = cumsum(possession_end)) %>%
-  ungroup()
+  mutate(ft_trip_id = row_number()) %>%
+  ungroup() %>%
+  select(game_id, ft_trip_id,
+         lineup_at_ft1      = updated_lineup,
+         home_lineup_at_ft1 = home_lineup,
+         away_lineup_at_ft1 = away_lineup)
 
-x <- play_by_play_data_small %>%
-  filter(!possession_end) %>%
-  count(type_text, sort = TRUE)
-
-
-# Showing Number of Possessions in a game
-
-play_by_play_data_small %>%
+# Find last FT of each trip
+ft_last <- ft_info %>%
+  filter(ft_attempt == ft_total, ft_total >= 2L) %>%
   group_by(game_id) %>%
-  summarise(total_possessions = max(possession_id)) %>%
-  ggplot(aes(x = total_possessions)) +
-  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
-  labs(
-    title = "Distribution of Possessions per Game",
-    x = "Total Possessions",
-    y = "Number of Games"
-  ) +
-  theme_minimal()
+  mutate(ft_trip_id = row_number()) %>%
+  ungroup() %>%
+  select(game_id, ft_trip_id, game_play_number)
 
+# Join first-FT lineups onto last-FT rows
+ft_fix <- ft_last %>%
+  left_join(ft_first, by = c("game_id", "ft_trip_id"))
+
+# Patch using row indexing instead of if_else (works with list columns)
+play_by_play_data_small <- play_by_play_data_small %>%
+  left_join(ft_fix %>% select(game_id, game_play_number,
+                              lineup_at_ft1,
+                              home_lineup_at_ft1,
+                              away_lineup_at_ft1),
+            by = c("game_id", "game_play_number"))
+
+# Find rows that need fixing
+fix_rows <- which(!sapply(play_by_play_data_small$lineup_at_ft1, is.null))
+
+# Overwrite list columns directly by index
+play_by_play_data_small$updated_lineup[fix_rows] <- play_by_play_data_small$lineup_at_ft1[fix_rows]
+play_by_play_data_small$home_lineup[fix_rows]    <- play_by_play_data_small$home_lineup_at_ft1[fix_rows]
+play_by_play_data_small$away_lineup[fix_rows]    <- play_by_play_data_small$away_lineup_at_ft1[fix_rows]
+
+# Drop temp columns
+play_by_play_data_small <- play_by_play_data_small %>%
+  select(-lineup_at_ft1, -home_lineup_at_ft1, -away_lineup_at_ft1)
 
 
 ##################################
@@ -273,7 +338,7 @@ player_game_seconds <- play_by_play_data_small %>%
 qualified_players <- player_game_seconds %>%
   group_by(all_players) %>%
   summarise(season_minutes = sum(total_minutes, na.rm = TRUE), .groups = "drop") %>%
-  filter(season_minutes > 1200) %>%
+  filter(season_minutes > 800) %>%
   pull(all_players)
 
 # Adding dummy ids (number of dummys is the id number)
@@ -303,6 +368,8 @@ dummy_play_by_play_data %>%
   unnest(all_players) %>%
   filter(all_players %in% as.character(1:5)) %>%
   count(all_players)
+
+
 
 ###########################################
 ### Changing from Possessions to Stints ###

@@ -16,7 +16,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2024, 2025)
+seasons <- c(2009)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -396,11 +396,20 @@ colnames(X_no_dummy) <- all_players_no_dummy
 ### Splitting Train and Test ###
 ################################
 
-n_stints <- nrow(X)
-train_size    <- floor(0.8 * n_stints)
+latest_season_year <- max(as.integer(format(as.Date(stints$game_date), "%Y")))
 
-train_idx <- seq_len(train_size)
-test_idx  <- seq(train_size + 1, n_stints)
+# Only march/april games of the last season
+test_games <- stints %>%
+  mutate(
+    year  = as.integer(format(as.Date(game_date), "%Y")),
+    month = as.integer(format(as.Date(game_date), "%m"))
+  ) %>%
+  filter(year == latest_season_year, month %in% c(3, 4)) %>%
+  pull(game_id) %>%
+  unique()
+
+train_idx <- which(!stints$game_id %in% test_games)
+test_idx  <- which(stints$game_id %in% test_games)
 
 w_train <- w[train_idx]
 w_test  <- w[test_idx]
@@ -560,3 +569,4 @@ perf <- data.frame(
   )
 )
 perf
+
