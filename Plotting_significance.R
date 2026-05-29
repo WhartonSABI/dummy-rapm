@@ -5,6 +5,21 @@ library(tidyverse)
 # -----------------------------
 results <- read_csv("May_27_Model_Results.csv")
 
+
+# -----------------------------
+# Summary Table
+# -----------------------------
+summary_table <- results %>%
+  group_by(model_type, min_minutes) %>%
+  summarise(
+    mean_RMSE = sprintf("%.2f", mean(RMSE, na.rm = TRUE)),
+    sd_RMSE   = round(sd(RMSE, na.rm = TRUE), 2),
+    mean_R2   = round(mean(R2, na.rm = TRUE), 3),
+    sd_R2     = round(sd(R2, na.rm = TRUE), 3),
+    n = n(),
+    .groups = "drop"
+  )
+
 # -----------------------------
 # Summarize across seasons
 # -----------------------------

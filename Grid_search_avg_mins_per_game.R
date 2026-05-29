@@ -18,7 +18,7 @@ set.seed(1)
 
 # Loading Play by Play Data from hoopR
 
-seasons <- c(2022)
+seasons <- c(2025)
 
 play_by_play_data <- load_nba_pbp(seasons)
 
@@ -734,7 +734,7 @@ all_coefs    <- bind_rows(grid_coefs)
 print(grid_summary)
 
 all_coefs %>%
-  filter(min_minutes == 20, model == "dummy") %>%
+  filter(min_minutes == 10, model == "dummy") %>%
   arrange(desc(coefficient)) %>%
   head(20)
 

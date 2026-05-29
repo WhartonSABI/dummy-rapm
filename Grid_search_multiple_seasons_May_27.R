@@ -992,6 +992,31 @@ for (season in seasons_to_run) {
     ### STORE RESULTS #########################
     ###########################################
     
+    extract_coefs <- function(model, label) {
+      coef_mat <- coef(model, s = "lambda.min")
+      data.frame(
+        season      = season,
+        min_minutes = min_minutes,
+        model       = label,
+        player_id   = rownames(as.matrix(coef_mat)),
+        coefficient = as.vector(as.matrix(coef_mat))
+      ) %>%
+        filter(player_id != "(Intercept)") %>%
+        mutate(player_id = as.character(player_id)) %>%
+        left_join(
+          player_names %>% mutate(athlete_id_1 = as.character(athlete_id_1)),
+          by = c("player_id" = "athlete_id_1")
+        ) %>%
+        select(season, min_minutes, model, player_id, player_name, coefficient) %>%
+        arrange(desc(coefficient))
+    }
+    
+    all_season_coefs[[paste(season, min_minutes, "dummy", sep = "_")]] <-
+      extract_coefs(dummy_model, "dummy")
+    
+    all_season_coefs[[paste(season, min_minutes, "no_dummy", sep = "_")]] <-
+      extract_coefs(no_dummy_model, "no_dummy")
+    
     grid_results[[paste0(
       season,
       "_",
@@ -1262,13 +1287,13 @@ model_rankings %>%
   print(n = Inf)
 
 
+#################################################
+### FINAL COEFFICIENTS ##########################
+#################################################
 
+final_coefs <- bind_rows(all_season_coefs)
 
-
-
-
-
-
+write.csv(final_coefs, "final_coefs_2005_2009.csv", row.names = FALSE)
 
 
 
