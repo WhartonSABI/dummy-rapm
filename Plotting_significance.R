@@ -200,6 +200,32 @@ r2_diff_plot <- ggplot(diff_summary, aes(x = min_minutes, y = mean_diff_R2)) +
   ) +
   theme_minimal(base_size = 14)
 
+# Plot 5: Season by season differences
+
+difference_by_season <- results %>%
+  filter(min_minutes == 10) %>%
+  ggplot(aes(x = season, y = RMSE, color = model_name, group = model_name)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "RMSE by Season (min_minutes = 10)",
+    x = "Season",
+    y = "RMSE",
+    color = "Model"
+  ) +
+  theme_minimal()
+
+# Proportion of times 10_dummy rmse < 10_no_dummy rmse
+
+prop_lower <- results %>%
+  filter(min_minutes == 10) %>%
+  select(season, model_name, RMSE) %>%
+  pivot_wider(names_from = model_name, values_from = RMSE) %>%
+  summarise(prop = mean(`10_dummy` < `10_no_dummy`)) %>%
+  pull(prop)
+
+prop_lower
+
 # -----------------------------
 # Display
 # -----------------------------
@@ -207,6 +233,7 @@ rmse_plot
 r2_plot
 rmse_diff_plot
 r2_diff_plot
+difference_by_season
 
 # -----------------------------
 # Save plots to current directory
@@ -243,3 +270,12 @@ ggsave(
   height = 6,
   dpi = 300
 )
+
+ggsave(
+  filename = "difference_by_season_plot.png",
+  plot = difference_by_season,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
