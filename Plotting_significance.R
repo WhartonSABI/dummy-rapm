@@ -1,10 +1,11 @@
 library(tidyverse)
 
+setwd("/Users/kennywatts/Documents/GitHub/Dummy-rapm")
+
 # -----------------------------
 # Load data
 # -----------------------------
 results <- read_csv("May_27_Model_Results.csv")
-
 
 # -----------------------------
 # Summary Table
@@ -215,6 +216,34 @@ difference_by_season <- results %>%
   ) +
   theme_minimal()
 
+# Plot 6: Does filtering (at any threshold) beat not filtering at all?
+baseline_compare <- diff_results %>%
+  group_by(season) %>%
+  mutate(
+    RMSE_baseline    = RMSE_dummy[min_minutes == 0],
+    R2_baseline      = R2_dummy[min_minutes == 0],
+    RMSE_improvement = RMSE_baseline - RMSE_dummy,   # positive = better than no filtering
+    R2_improvement   = R2_dummy - R2_baseline        # positive = better than no filtering
+  ) %>%
+  ungroup()
+
+baseline_long <- baseline_compare %>%
+  select(season, min_minutes, RMSE_improvement, R2_improvement) %>%
+  pivot_longer(cols = c(RMSE_improvement, R2_improvement), names_to = "metric", values_to = "value")
+
+baseline_10_r2 <- baseline_long %>%
+  filter(min_minutes == 10, metric == "R2_improvement")
+
+threshold_vs_no_filter <- ggplot(baseline_10_r2, aes(x = factor(season), y = value, fill = value > 0)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  scale_fill_manual(values = c("TRUE" = "#2c7fb8", "FALSE" = "#d95f0e"), guide = "none") +
+  labs(title = "Does a 10-Minute Threshold Beat Not Filtering At All?",
+       subtitle = "Positive values = filtered dummy model (min_minutes = 10) outperforms min_minutes = 0",
+       x = "Season", y = "R² improvement") +
+  theme_minimal()
+
+
 # Proportion of times 10_dummy rmse < 10_no_dummy rmse
 
 prop_lower <- results %>%
@@ -226,6 +255,7 @@ prop_lower <- results %>%
 
 prop_lower
 
+
 # -----------------------------
 # Display
 # -----------------------------
@@ -234,6 +264,7 @@ r2_plot
 rmse_diff_plot
 r2_diff_plot
 difference_by_season
+threshold_vs_no_filter
 
 # -----------------------------
 # Save plots to current directory
@@ -274,6 +305,14 @@ ggsave(
 ggsave(
   filename = "difference_by_season_plot.png",
   plot = difference_by_season,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  filename = "threshold_vs_no_filter_plot.png",
+  plot = threshold_vs_no_filter,
   width = 8,
   height = 6,
   dpi = 300
