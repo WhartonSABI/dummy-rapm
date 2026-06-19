@@ -21,9 +21,9 @@ set.seed(1)
 
 # Last full seasons excluding COVID 2020 season
 
-seasons_to_run <- c(2015, 2016, 2017, 2018, 2019)
+seasons_to_run <- c(2025)
 
-minutes_thresholds <- seq(0, 30, by = 5)
+minutes_thresholds <- seq(0, 30, by = 10)
 
 #################################################
 ### STORAGE #####################################
@@ -1313,4 +1313,4 @@ pair_coefs
 
 final_coefs <- bind_rows(all_season_coefs)
 
-write.csv(final_coefs, "interaction_final_coefs_2015_2019.csv", row.names = FALSE)
+#write.csv(final_coefs, "interaction_final_coefs_2015_2019.csv", row.names = FALSE)
