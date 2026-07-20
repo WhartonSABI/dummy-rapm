@@ -243,6 +243,18 @@ threshold_vs_no_filter <- ggplot(baseline_10_r2, aes(x = factor(season), y = val
        x = "Season", y = "R² improvement") +
   theme_minimal()
 
+baseline_10_rmse <- baseline_long %>%
+  filter(min_minutes == 10, metric == "RMSE_improvement")
+
+threshold_vs_no_filter_rmse <- ggplot(baseline_10_rmse, aes(x = factor(season), y = value, fill = value > 0)) +
+  geom_col() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  scale_fill_manual(values = c("TRUE" = "#2c7fb8", "FALSE" = "#d95f0e"), guide = "none") +
+  labs(title = "Does a 10-Minute Threshold Beat Not Filtering At All?",
+       subtitle = "Positive values = filtered dummy model (min_minutes = 10) outperforms min_minutes = 0",
+       x = "Season", y = "RMSE improvement") +
+  theme_minimal()
+
 
 # Proportion of times 10_dummy rmse < 10_no_dummy rmse
 
@@ -265,6 +277,7 @@ rmse_diff_plot
 r2_diff_plot
 difference_by_season
 threshold_vs_no_filter
+threshold_vs_no_filter_rmse
 
 # -----------------------------
 # Save plots to current directory
@@ -313,6 +326,14 @@ ggsave(
 ggsave(
   filename = "threshold_vs_no_filter_plot.png",
   plot = threshold_vs_no_filter,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  filename = "threshold_vs_no_filter_rmse.png",
+  plot = threshold_vs_no_filter_rmse,
   width = 8,
   height = 6,
   dpi = 300
