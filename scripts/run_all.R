@@ -70,11 +70,6 @@ for (stage in stages) {
   }
 }
 
-dir.create(
-  "output/pdf",
-  showWarnings = FALSE,
-  recursive = TRUE
-)
 original_directory <- getwd()
 setwd("manuscript")
 latex_status <- system2(
@@ -87,19 +82,13 @@ setwd(original_directory)
 if (latex_status != 0L) {
   stop("Manuscript compilation failed.", call. = FALSE)
 }
-if (
-  !file.copy(
-    "manuscript/main.pdf",
-    "output/pdf/dummy_rapm.pdf",
-    overwrite = TRUE
-  )
-) {
-  stop("Could not finalize output/pdf/dummy_rapm.pdf.", call. = FALSE)
+if (!file.exists("manuscript/main.pdf")) {
+  stop("Could not finalize manuscript/main.pdf.", call. = FALSE)
 }
 
 cat(
   paste(
     "\nAnalysis complete. Final outputs are in",
-    "results/, figures/, and output/pdf/.\n"
+    "results/, figures/, and manuscript/main.pdf.\n"
   )
 )

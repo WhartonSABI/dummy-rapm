@@ -743,7 +743,7 @@ rmse_by_season_plot <- ggplot(
     ),
     labels = c(
       dummy = "Dummy RAPM",
-      no_dummy = "No-dummy RAPM"
+      no_dummy = "Filtered RAPM"
     )
   ) +
   labs(
@@ -776,7 +776,7 @@ rmse_gain_plot <- ggplot(
   ) +
   labs(
     x = "Season",
-    y = "No-dummy RMSE minus Dummy RMSE"
+    y = "Filtered RAPM RMSE minus Dummy RAPM RMSE"
   ) +
   theme_minimal(base_size = 12)
 

@@ -18,4 +18,4 @@ manuscript/*.fdb_latexmk
 manuscript/*.fls
 manuscript/*.log
 manuscript/*.out
-manuscript/main.pdf
+manuscript/*.synctex.gz

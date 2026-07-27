@@ -14,9 +14,9 @@ five for the home lineup and five for the away lineup.
 - Outer test: March–April.
 - May–September: excluded.
 - Outcome: home scoring margin per 100 team possessions.
-- Selection and headline evaluation: aggregated full-game margin RMSE.
-- Secondary descriptive metric: out-of-sample R².
-- Low-minute threshold: selected from the broad inner-validation grid.
+- Model selection: aggregated full-game margin RMSE.
+- Reported performance: game-margin RMSE and out-of-sample R².
+- Low-minute threshold: selected from the inner-validation grid.
 - Dummy-to-player ridge penalty ratio: selected from a 0.1-spaced grid from
   1.0 through 2.5, extended automatically if the winner is on a boundary.
 
@@ -35,8 +35,7 @@ Rscript --vanilla scripts/run_all.R
 The model grid and penalty tuning use `parallel::detectCores() - 4` workers by
 default (with a minimum of one). Set `RAPM_WORKERS` to override that value.
 The complete runner executes tests, refits the analysis, regenerates tables and
-figures, compiles the manuscript, and copies the checked artifact to
-`output/pdf/dummy_rapm.pdf`.
+figures, and compiles the manuscript to `manuscript/main.pdf`.
 
 Completed seasons are checkpointed, so an interrupted run resumes rather than
 refitting finished seasons. Checkpoints include a specification version,
@@ -54,8 +53,12 @@ To compile the manuscript:
 
 ```bash
 cd manuscript
-latexmk -pdf main.tex
+latexmk -pdf -interaction=nonstopmode main.tex
 ```
+
+Use `latexmk` rather than a single `pdflatex` pass. The manuscript uses BibTeX
+citations and cross-references, so a one-pass build leaves question marks in
+their place.
 
 ## Repository structure
 
@@ -67,6 +70,5 @@ latexmk -pdf main.tex
 - `tests/test_rapm_utils.R`: targeted regression tests.
 - `results/`: final machine-readable result tables.
 - `figures/`: final manuscript figures.
-- `manuscript/`: LaTeX source and generated result macros.
-- `output/pdf/`: compiled manuscript.
+- `manuscript/`: LaTeX source, generated result inputs, and compiled PDF.
 - `archive/`: legacy exploratory scripts and outputs retained for reference.
