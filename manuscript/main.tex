@@ -1,0 +1,474 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{authblk}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{natbib}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  citecolor=blue!60!black,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+\makeatletter
+\renewcommand{\@seccntformat}[1]{%
+  \csname the#1\endcsname\hspace{0.75em}%
+}
+\makeatother
+
+\input{results.tex}
+
+\title{Dummy RAPM: Representing Low-Minute Players in\\
+Regularized Adjusted Plus-Minus}
+\author{Kenny Watts}
+\author{Jonathan Pipping-Gam\'on}
+\author{Abraham J. Wyner}
+\affil{\small The Wharton School, University of Pennsylvania}
+\date{July 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Regularized Adjusted Plus-Minus (RAPM) estimates player associations with
+scoring margin from stint-level lineup indicators. When low-minute player
+columns are removed while their stints remain in the sample, the reduced
+design no longer records the complete lineup. We introduce Dummy RAPM, which
+augments the retained-player matrix with five low-minute-player count
+indicators for each lineup side. The ten indicators receive a common ridge
+penalty distinct from the player penalty. We evaluate the model over
+\NumberSeasons{} NBA seasons using chronological inner validation and an
+untouched March--April test period. Inner validation selects a
+\SelectedThreshold-minute-per-appearance threshold and
+a dummy-to-player penalty ratio of \SelectedPenaltyRatio. Dummy RAPM lowers
+mean game-margin RMSE from \MeanNoDummyRMSE{} to \MeanDummyRMSE{}, an average
+gain of \MeanRMSEGain{} points (\RelativeRMSEGain), and improves RMSE in
+\RMSEWins{} of \NumberSeasons{} seasons. The gain is modest in magnitude but
+consistent across paired season-level tests. The results support a
+partially pooled representation of lineup-side counts, while providing little
+evidence that filtering players without representing them improves
+prediction.
+\end{abstract}
+
+\section{Introduction}
+
+Basic plus-minus measures a team's score differential while a player is on the
+court but does not adjust for teammates or opponents. Adjusted Plus-Minus
+(APM), associated with the WINVAL work of Jeff Sagarin and Wayne Winston and
+described publicly by \citet{Rosenbaum2004}, addresses this limitation by
+regressing stint-level score differentials on player indicators.
+
+APM estimates are unstable when players repeatedly share the floor with the
+same teammates and opponents or appear in few stints. Ridge regression
+stabilizes correlated designs by shrinking coefficients
+\citep{HoerlKennard1970}. \citet{Sill2010} applied this approach to APM and
+emphasized evaluation on future games, yielding Regularized Adjusted
+Plus-Minus (RAPM). Bayesian partial-pooling approaches provide a related
+response to weak identification.
+\citet{FearnheadTaylor2011} estimated offensive and defensive abilities while
+borrowing information across seasons, and \citet{DeshpandeJensen2016} modeled
+changes in win probability using Bayesian linear regression. Box Plus-Minus
+(BPM) is a separate box-score-based branch rather than a Bayesian plus-minus
+estimator itself. However, the BPM 2.0 regression was trained against
+Bayesian-prior-informed, multiyear RAPM targets \citep{Myers2020}.
+
+Some RAPM implementations remove low-minute players before fitting. Removing a
+column does not remove the corresponding stints from the response, so the
+omitted contribution remains in the response. It can be attributed to
+retained-player coefficients when it is correlated with retained-player
+indicators; otherwise it is absorbed primarily by the intercept and residual.
+We ask whether a small set of partially pooled count indicators can represent
+this missing lineup information without estimating an individual coefficient
+for every low-minute player.
+
+Our contribution is methodological and empirical. We construct separate count
+indicators for excluded home and away players, assign them a ridge penalty
+distinct from the player penalty, and evaluate the resulting model using
+chronological nested selection. We also impose explicit lineup, scoring, and
+game-margin reconstruction checks before fitting.
+
+\section{Model}
+
+\subsection{Stint response and player design}
+
+A stint is an interval over which neither lineup changes. Let $\Delta_i$ be the
+change in home-minus-away score margin during stint $i$, and define exposure
+\[
+q_i = \frac{P_{H,i}+P_{A,i}}{2},
+\]
+where $P_{H,i}$ and $P_{A,i}$ count home and away possession-ending events.
+The response is
+\[
+y_i = 100\frac{\Delta_i}{q_i},
+\]
+the home-team margin per 100 team possessions. Observation $i$ receives weight
+$q_i$, so a longer stint contributes more to estimation. Scaling before
+estimation makes coefficients directly interpretable in points per 100 team
+possessions.
+
+For retained player $j$, $x_{ij}=1$ when the player is in the home lineup,
+$x_{ij}=-1$ when in the away lineup, and $x_{ij}=0$ otherwise. The ordinary
+no-dummy RAPM estimator is proportional to
+\[
+\left(\hat{\alpha},\hat{\boldsymbol{\beta}}\right)
+=
+\arg\min_{\alpha,\boldsymbol{\beta}}
+\left\{
+\sum_{i=1}^{n}q_i
+\left(y_i-\alpha-\mathbf{x}_i^\mathsf{T}\boldsymbol{\beta}\right)^2
++\lambda_P\|\boldsymbol{\beta}\|_2^2
+\right\}.
+\]
+The intercept is not penalized, and predictors are not standardized. Models
+are fit with \texttt{glmnet} \citep{FriedmanHastieTibshirani2010}.
+
+\subsection{Lineup-side count indicators}
+
+For $k=1,\ldots,5$, define
+\[
+d_{H,i}^{(k)}
+=
+\mathbb{1}\{\text{the home lineup in stint }i
+\text{ contains exactly }k\text{ excluded players}\},
+\]
+\[
+d_{A,i}^{(k)}
+=
+\mathbb{1}\{\text{the away lineup in stint }i
+\text{ contains exactly }k\text{ excluded players}\}.
+\]
+Count zero is the reference category. The augmented model therefore contains
+ten dummy regressors, five for each lineup side. Separate player, home-dummy,
+and away-dummy namespaces prevent numeric player identifiers from colliding
+with dummy names. A five-column signed encoding would impose equal-and-opposite
+home and away coefficients at each count. The ten-column encoding does not
+impose that restriction: a given number of excluded home players and excluded
+away players can have different magnitudes rather than being forced to differ
+only in sign.
+
+Let $\boldsymbol{\gamma}_H$ and $\boldsymbol{\gamma}_A$ denote the two
+five-element dummy blocks. Dummy RAPM estimates
+\[
+\begin{split}
+\arg\min_{\alpha,\boldsymbol{\beta},
+\boldsymbol{\gamma}_H,\boldsymbol{\gamma}_A}
+\quad&
+\sum_{i=1}^{n}q_i
+\left(
+y_i-\alpha-\mathbf{x}_i^\mathsf{T}\boldsymbol{\beta}
+-\mathbf{d}_{H,i}^\mathsf{T}\boldsymbol{\gamma}_H
+-\mathbf{d}_{A,i}^\mathsf{T}\boldsymbol{\gamma}_A
+\right)^2\\
+&+\lambda_P\|\boldsymbol{\beta}\|_2^2
++\lambda_D\left(
+\|\boldsymbol{\gamma}_H\|_2^2+
+\|\boldsymbol{\gamma}_A\|_2^2
+\right).
+\end{split}
+\]
+We tune the relative penalty $\rho=\lambda_D/\lambda_P$. A common
+dummy-specific penalty permits a different degree of pooling from player
+coefficients without introducing ten sparsely estimated hyperparameters.
+
+\subsection{Low-minute threshold}
+
+\citet{Rosenbaum2004} placed players with less than 250 minutes in the two
+seasons combined into a common reference category. Our threshold instead uses
+mean minutes conditional on appearing in a game, calculated only from the
+relevant training period. This avoids labeling an ordinary rotation player as
+low-minute solely because of missed games, but it differs from a total-minutes
+rule and can retain players with few appearances. We therefore interpret the
+threshold as a prediction-tuned modeling choice rather than a definition of
+player quality.
+
+\section{Data Construction and Validation}
+
+We obtain publicly accessible ESPN play-by-play and player box-score records
+through the open-source \texttt{hoopR} package \citep{Gilani2026}. Official
+box-score starter flags initialize each five-player lineup; recorded
+substitutions update the lineup thereafter. If either team lacks exactly five
+unique recorded starters, we exclude the full game rather than guess an
+opening lineup. Across the primary sample, \StarterExcludedGames{} games are
+excluded for this reason, including
+\StarterExcludedTwentyNineteenGames{} in 2019.
+
+Every modeled stint must contain exactly five unique home players and five
+unique away players. Stint points are constructed from changes in the reported
+home-minus-away scoreboard margin, including the first scoring event in each
+stint. This scoreboard-delta construction credits technical free throws and
+other free-throw points even when an event is not marked as ending a
+possession. A scoring segment with zero possession exposure---for example, free
+throws separated by a substitution---is joined to the next positive-exposure
+stint, or to the preceding one at the end of a game. Thus no scored point is
+assigned an infinite per-possession response. The reconstructed stint margins
+must sum exactly to the official final margin in every included game.
+Period labels are also required to form a contiguous sequence beginning at
+one; this removes a single disconnected postgame record labeled as period 29
+without truncating valid multi-overtime games.
+
+The primary analysis retains all possessions, including those labeled as
+garbage time and those played in overtime. Removing them would change the
+full-game prediction target. The analysis uses open-source software, but we
+describe the underlying ESPN data as publicly accessible rather than fully
+open source.
+
+Table~\ref{tab:sample} reports the season-level sample. The analysis contains
+\TotalModeledGames{} games and \TotalModeledStints{} positive-exposure stints.
+``Out'' denotes regular-season games in May--September, which are excluded
+before model fitting or evaluation. Starter exclusions may overlap the
+out-of-window count.
+
+\begin{table}[htbp]
+\centering
+\caption{Season-level analysis sample and chronological windows}
+\label{tab:sample}
+\input{sample_summary_table.tex}
+\end{table}
+
+\section{Selection and Evaluation}
+
+The sample contains \NumberSeasons{} seasons: 2007--2019 and 2022--2025. It
+begins in 2007 because starter metadata are incomplete in earlier seasons.
+The disrupted 2019--20 season and the COVID-shortened 2020--21 season are
+excluded because neither supports the same October--April chronological split.
+
+Within each season, October--December games form the inner training period,
+January--February games form the inner validation period, and March--April
+games form the outer test period. Outer training is exactly the union of the
+October--December and January--February windows. May--September games are in
+none of the four analysis sets. Programmatic checks require every game to
+receive one disjoint base-window label and require the latest training date to
+precede the earliest validation or test date.
+
+The initial inner search considers
+average-minutes-per-appearance thresholds
+\[
+\{0,5,10,15,20,25,30\}
+\]
+and dummy-to-player penalty ratios
+\[
+\{0,0.1,0.25,0.5,1,2\}.
+\]
+At threshold zero, all players observed in the relevant training period are
+retained. The augmented fit is implemented by reusing the no-dummy fit and
+appending ten exactly zero dummy coefficients. Its predictions, selected
+lambda, RMSE, and $R^2$ are therefore required to equal the no-dummy quantities
+exactly. It remains a training-observed baseline rather than a claim that every
+possible player is known in advance.
+
+The broad grid selects a \SelectedThreshold-minute threshold. We then evaluate
+the following penalty grid at that threshold:
+\[
+\rho\in\{1.0,1.1,\ldots,2.5\}.
+\]
+If a boundary value wins, the grid is extended by increments of 0.1 until the
+optimum is interior. The checked grid runs from
+\CheckedPenaltyMinimum{} to \CheckedPenaltyMaximum{} and selects
+$\rho=\SelectedPenaltyRatio$.
+All selection uses mean inner-validation game-margin RMSE across seasons. To
+avoid selecting a threshold for only one member of the final comparison, the
+threshold score averages Dummy RAPM and no-dummy RAPM RMSE. Exact ties prefer
+the lower minute threshold and then the larger dummy penalty. Neither outer
+RMSE nor $R^2$ participates in selection.
+
+After selection, both models are refit using all games through February and
+evaluated once on March--April games. Player eligibility is recomputed using
+only the corresponding training period. One deterministic five-fold,
+game-grouped assignment is constructed for each season and training window,
+using a seed based only on season and window. The same assignment is passed to
+every threshold, model, and penalty ratio. Within each fit, $\lambda_P$ is
+chosen by minimizing cross-validated aggregated game-margin RMSE. Grouping
+prevents stints from the same game from entering both sides of a fold; common
+folds ensure that candidate specifications face the same validation split.
+
+For game $g$, stint predictions are converted back to points and summed:
+\[
+\widehat{\Delta}_g
+=
+\sum_{i\in g}\widehat{y}_i q_i/100.
+\]
+RMSE is the selection and headline metric. We also report descriptive
+out-of-sample
+\[
+R^2_{\mathrm{oos}}
+=
+1-\frac{\sum_{g\in\mathcal{T}}
+(\Delta_g-\widehat{\Delta}_g)^2}
+{\sum_{g\in\mathcal{T}}
+(\Delta_g-\overline{\Delta}_{\mathcal{T}})^2},
+\]
+where $\mathcal{T}$ is the March--April test set and the comparator predicts
+that season's mean test-set margin for every game. Paired season-level RMSE
+differences are summarized with two-sided paired $t$, Wilcoxon signed-rank, and
+sign tests. These are descriptive comparisons across seasons, not independent
+experimental replications.
+
+The exercise conditions on the realized held-out lineups. It evaluates
+out-of-sample lineup prediction and should not be interpreted as a pregame
+forecast.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{../figures/penalty_tuning.png}
+\caption{Mean inner-validation game-margin RMSE over the refined
+dummy-to-player penalty grid. The dashed line marks the selected ratio,
+\SelectedPenaltyRatio.}
+\label{fig:penalty}
+\end{figure}
+
+\section{Results}
+
+\subsection{Out-of-sample prediction}
+
+\begin{table}[H]
+\centering
+\caption{Outer-test predictive performance across \NumberSeasons{} seasons}
+\label{tab:prediction}
+\begin{tabular}{lccc}
+\toprule
+Model & Mean RMSE & Mean $R^2$ & RMSE wins \\
+\midrule
+Dummy RAPM & \MeanDummyRMSE & \MeanDummyRSquared & \RMSEWins \\
+No-dummy RAPM & \MeanNoDummyRMSE & \MeanNoDummyRSquared &
+\NoDummyRMSEWins \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Dummy RAPM reduces mean game-margin RMSE by \MeanRMSEGain{} points, or
+\RelativeRMSEGain, with a season-level 95\% interval from \RMSEGainCILow{} to
+\RMSEGainCIHigh. The two-sided paired $t$-test gives
+$t(\PairedTDegreesFreedom)=\PairedTStatistic$ and $p=\PairedTPValue$.
+The two-sided Wilcoxon signed-rank test gives
+$W=\WilcoxonStatistic$ and $p=\WilcoxonPValue$; the two-sided sign test observes
+\SignTestSuccesses{} positive differences in \NumberSeasons{} seasons and gives
+$p=\SignTestPValue$. As a secondary descriptive result, mean out-of-sample
+$R^2$ changes by \MeanRSquaredGain. The RMSE difference should be read together
+with its small absolute magnitude rather than as evidence of a large practical
+effect.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\linewidth]{../figures/rmse_gain_by_season.png}
+\caption{Outer-test game-margin RMSE difference by season. Positive values
+indicate lower RMSE for Dummy RAPM.}
+\label{fig:rmsegain}
+\end{figure}
+
+Dummy RAPM has lower RMSE in \PreTwentyTwentyWins{} of
+\PreTwentyTwentySeasons{} seasons through 2019 and in
+\PostCovidWins{} of \PostCovidSeasons{} seasons from 2022 onward.
+Because 2019 has the largest starter-data exclusion count, we also remove that
+season as a sensitivity check. The remaining
+\NumberSeasonsExcludingTwentyNineteen{} seasons retain an average RMSE gain of
+\ExcludingTwentyNineteenRMSEGain{} points
+($p=\ExcludingTwentyNineteenPValue$).
+
+\subsection{Filtering and representation}
+
+The result does not imply that filtering alone improves RAPM. Relative to the
+zero-threshold no-dummy baseline, the selected no-dummy model is worse by
+\NoDummyBaselineRMSELoss{} RMSE on average
+($p=\NoDummyBaselinePValue$). Dummy RAPM improves on that baseline by
+\DummyBaselineRMSEGain{} RMSE, but this broader comparison is less precise
+($p=\DummyBaselinePValue$). The stronger finding is the controlled comparison
+at the same selected threshold: representing excluded-player counts performs
+better than simply dropping those columns.
+
+\subsection{Dummy coefficients}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Selected outer-training dummy-category exposure across seasons}
+\label{tab:exposure}
+\input{category_exposure_table.tex}
+\end{table}
+
+Table~\ref{tab:exposure} reports how often each home and away count occurs in
+the selected outer-training designs. Exposure is the sum of
+$q_i=(P_{H,i}+P_{A,i})/2$ over contributing stints. The season lists distinguish
+structural zeros caused by an absent category from coefficients merely shrunk
+close to zero.
+
+\begin{table}[H]
+\centering
+\caption{Selected dummy coefficients across seasons}
+\label{tab:coefficients}
+\input{dummy_coefficient_table.tex}
+\end{table}
+
+The dummy coefficients summarize regularized lineup-level associations and do
+not estimate causal effects for excluded players. Low-minute lineups may be
+selected in response to score state, injuries, matchups, or schedule
+conditions. Relative to zero excluded players on the same side, one excluded
+home player is associated with \HomeOneCoefficient{} home-margin points per
+100 possessions, while one excluded away player is associated with
+\AwayOneCoefficient{} points. The home one-player coefficient is negative in
+\HomeOneNegativeSeasons{} seasons; the away coefficient is positive in
+\AwayOnePositiveSeasons{}.
+
+The coefficients are not monotone in the count. Counts of four and five are
+exactly zero in many seasons, indicating rare categories that are strongly
+pooled toward zero. We therefore do not interpret the dummy sequence as a
+dose-response curve, and the cross-season intervals in
+Figure~\ref{fig:coefficients} are descriptive summaries of penalized estimates,
+not classical coefficient confidence intervals.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{../figures/dummy_coefficients.png}
+\caption{Mean selected home and away dummy coefficients with descriptive
+95\% cross-season $t$ intervals. Away coefficients retain the home-margin
+orientation.}
+\label{fig:coefficients}
+\end{figure}
+
+\section{Discussion}
+
+The analysis supports a narrow conclusion: after selecting a
+\SelectedThreshold-minute threshold without using the outer test period,
+adding ten lineup-side count indicators lowers mean held-out RMSE relative to
+dropping the same player columns without representation. The focused inner
+search favors stronger shrinkage for dummy coefficients than for player
+coefficients. The exact ordering is shallow across the focused grid, and an
+arbitrarily large dummy penalty would converge toward the no-dummy model.
+
+Several limitations matter. First, the result concerns game-margin prediction,
+not causal player effects. Second, lineups are reconstructed from event data
+and starter records rather than an official shift chart. The lineup and
+score-reconciliation checks catch many errors, but a valid-looking lineup can
+still be incorrect. Third, the exact penalty optimum is shallow;
+$\rho=\SelectedPenaltyRatio$ is a reproducible grid choice rather than a
+sharply identified scientific constant. Fourth, starter metadata require game
+exclusions concentrated in 2019, and high dummy counts are rare. Finally,
+adjacent season-level comparisons share players, coaches, and league
+conditions. The paired tests do not remove this temporal dependence, and
+future-season validation remains valuable.
+
+\section{Conclusion}
+
+Dummy RAPM offers a compact way to represent low-minute players whose
+individual columns are omitted from a RAPM design. In the selected
+specification, five home and five away count indicators receive a common
+penalty \SelectedPenaltyRatio{} times the player penalty. Across
+\NumberSeasons{} seasons, the model improves game-margin RMSE in \RMSEWins{}
+seasons. The average gain is modest, and $R^2$ is retained only as a secondary
+description. The evidence favors partially pooling omitted-player counts, not
+filtering players by itself.
+
+\bibliographystyle{apalike}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,21 @@
+# archive
+archive/
+
+
+.rapm_cache/
+.rapm_checkpoints/
+.rapm_penalty_extension/
+.DS_Store
+.RData
+.Rhistory
+.Rproj.user/
+logs/
+tmp/
+manuscript/*.aux
+manuscript/*.bbl
+manuscript/*.blg
+manuscript/*.fdb_latexmk
+manuscript/*.fls
+manuscript/*.log
+manuscript/*.out
+manuscript/main.pdf
