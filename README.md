@@ -26,6 +26,17 @@ builder or manuscript.
 
 ## Run the analysis
 
+The analysis requires the R packages `dplyr`, `ggplot2`, `glmnet`, `hoopR`,
+`ltc`, `Matrix`, `purrr`, `stringr`, `tidyr`, and `zoo`. Install any missing
+packages before running the pipeline:
+
+```r
+install.packages(c(
+  "dplyr", "ggplot2", "glmnet", "hoopR", "ltc",
+  "Matrix", "purrr", "stringr", "tidyr", "zoo"
+))
+```
+
 From the repository root:
 
 ```bash

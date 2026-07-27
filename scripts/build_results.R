@@ -1,6 +1,7 @@
 suppressPackageStartupMessages({
   library(dplyr)
   library(ggplot2)
+  library(ltc)
   library(purrr)
   library(tidyr)
 })
@@ -725,12 +726,20 @@ write.csv(
   row.names = FALSE
 )
 
+maya_palette <- ltc::ltc("maya")
+plot_colors <- c(
+  navy = unname(maya_palette[[1]]),
+  coral = unname(maya_palette[[4]])
+)
+
 rmse_by_season_plot <- ggplot(
   season_results,
   aes(
     x = season,
     y = RMSE,
     color = model_type,
+    linetype = model_type,
+    shape = model_type,
     group = model_type
   )
 ) +
@@ -738,18 +747,37 @@ rmse_by_season_plot <- ggplot(
   geom_point(size = 2) +
   scale_color_manual(
     values = c(
-      dummy = "#D55E00",
-      no_dummy = "#0072B2"
+      dummy = plot_colors[["coral"]],
+      no_dummy = plot_colors[["navy"]]
     ),
+    breaks = c("dummy", "no_dummy"),
     labels = c(
       dummy = "Dummy RAPM",
       no_dummy = "Filtered RAPM"
-    )
+    ),
+    name = "Model"
+  ) +
+  scale_linetype_manual(
+    values = c(dummy = "solid", no_dummy = "dashed"),
+    breaks = c("dummy", "no_dummy"),
+    labels = c(
+      dummy = "Dummy RAPM",
+      no_dummy = "Filtered RAPM"
+    ),
+    name = "Model"
+  ) +
+  scale_shape_manual(
+    values = c(dummy = 16, no_dummy = 17),
+    breaks = c("dummy", "no_dummy"),
+    labels = c(
+      dummy = "Dummy RAPM",
+      no_dummy = "Filtered RAPM"
+    ),
+    name = "Model"
   ) +
   labs(
     x = "Season",
-    y = "Game-margin RMSE",
-    color = "Model"
+    y = "Game-margin RMSE"
   ) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "bottom")
@@ -769,8 +797,8 @@ rmse_gain_plot <- ggplot(
   ) +
   scale_fill_manual(
     values = c(
-      `TRUE` = "#0072B2",
-      `FALSE` = "#D55E00"
+      `TRUE` = plot_colors[["navy"]],
+      `FALSE` = plot_colors[["coral"]]
     ),
     guide = "none"
   ) +
@@ -785,7 +813,9 @@ dummy_coefficient_plot <- ggplot(
   aes(
     x = excluded_players,
     y = mean_coefficient,
-    color = side
+    color = side,
+    linetype = side,
+    shape = side
   )
 ) +
   geom_hline(
@@ -804,12 +834,26 @@ dummy_coefficient_plot <- ggplot(
   ) +
   scale_x_continuous(breaks = 1:5) +
   scale_color_manual(
-    values = c(Away = "#D55E00", Home = "#0072B2")
+    values = c(
+      Away = plot_colors[["coral"]],
+      Home = plot_colors[["navy"]]
+    ),
+    breaks = c("Away", "Home"),
+    name = "Lineup side"
+  ) +
+  scale_linetype_manual(
+    values = c(Away = "solid", Home = "dashed"),
+    breaks = c("Away", "Home"),
+    name = "Lineup side"
+  ) +
+  scale_shape_manual(
+    values = c(Away = 16, Home = 17),
+    breaks = c("Away", "Home"),
+    name = "Lineup side"
   ) +
   labs(
     x = "Low-minute players in lineup",
-    y = "Points per 100 team possessions",
-    color = "Lineup side"
+    y = "Points per 100 team possessions"
   ) +
   theme_minimal(base_size = 12) +
   theme(legend.position = "bottom")
@@ -821,12 +865,16 @@ penalty_tuning_plot <- ggplot(
     y = mean_neutral_inner_RMSE
   )
 ) +
-  geom_line(color = "#0072B2", linewidth = 0.8) +
-  geom_point(color = "#0072B2", size = 2) +
+  geom_line(color = plot_colors[["navy"]], linewidth = 0.8) +
+  geom_point(
+    color = plot_colors[["navy"]],
+    shape = 17,
+    size = 2
+  ) +
   geom_vline(
     xintercept = selected_dummy_penalty_ratio,
     linetype = "dashed",
-    color = "#D55E00"
+    color = plot_colors[["coral"]]
   ) +
   scale_x_continuous(
     breaks = seq(
